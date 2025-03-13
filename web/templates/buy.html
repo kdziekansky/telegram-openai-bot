@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zakup pakietu - {{ bot_name }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <header class="bg-blue-600 text-white shadow-lg">
+        <div class="container mx-auto px-4 py-6">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-3xl font-bold">{{ bot_name }}</h1>
+                    <p class="text-blue-100">Zakup pakietu</p>
+                </div>
+                <nav>
+                    <a href="{{ url_for('index') }}" class="bg-blue-500 hover:bg-blue-400 text-white px-3 py-1 rounded">Powrót do sklepu</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-12">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6">
+                    {% for message in messages %}
+                        <p>{{ message }}</p>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <div class="max-w-md mx-auto bg-white rounded-lg shadow-md overflow-hidden">
+            <div class="bg-blue-500 text-white p-4">
+                <h2 class="text-xl font-bold">Zakup pakietu: {{ package.name }}</h2>
+            </div>
+            
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-6 p-4 bg-gray-50 rounded-lg">
+                    <div>
+                        <p class="text-gray-600">Kredyty:</p>
+                        <p class="text-2xl font-bold">{{ package.credits }}</p>
+                    </div>
+                    <div>
+                        <p class="text-gray-600">Cena:</p>
+                        <p class="text-2xl font-bold text-blue-600">{{ package.price }} zł</p>
+                    </div>
+                </div>
+                
+                <form action="{{ url_for('buy_credits', package_id=package.id) }}" method="post">
+                    <div class="mb-4">
+                        <label for="telegram_id" class="block text-gray-700 font-medium mb-2">
+                            Twój identyfikator Telegram (ID)
+                        </label>
+                        <input 
+                            type="text" 
+                            id="telegram_id" 
+                            name="telegram_id" 
+                            required 
+                            placeholder="Np. 123456789"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                        <p class="mt-1 text-sm text-gray-500">
+                            Nie znasz swojego ID? Wyślij komendę /status do naszego bota.
+                        </p>
+                    </div>
+                    
+                    <div class="bg-gray-100 p-4 rounded-lg mb-4">
+                        <h3 class="font-bold mb-2">Metoda płatności</h3>
+                        <!-- W rzeczywistym projekcie tutaj byłaby integracja z systemem płatności -->
+                        <div class="flex items-center">
+                            <input type="radio" id="payment_card" name="payment_method" value="card" checked class="mr-2">
+                            <label for="payment_card" class="flex items-center">
+                                <span class="mr-2">Karta płatnicza</span>
+                                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Visa_Inc._logo.svg/200px-Visa_Inc._logo.svg.png" alt="Visa" class="h-6">
+                                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/200px-Mastercard-logo.svg.png" alt="Mastercard" class="h-6 ml-1">
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <button 
+                        type="submit" 
+                        class="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 transition"
+                    >
+                        Zapłać i doładuj konto
+                    </button>
+                </form>
+                
+                <p class="mt-4 text-sm text-gray-600">
+                    Klikając przycisk "Zapłać i doładuj konto" zgadzasz się z 
+                    <a href="#" class="text-blue-600 hover:underline">regulaminem</a> 
+                    oraz <a href="#" class="text-blue-600 hover:underline">polityką prywatności</a>.
+                </p>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-gray-800 text-white py-4 mt-12">
+        <div class="container mx-auto px-4 text-center">
+            <p>© 2023 {{ bot_name }} - Wszelkie prawa zastrzeżone</p>
+        </div>
+    </footer>
+</body>
+</html>

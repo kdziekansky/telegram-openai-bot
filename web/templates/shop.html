@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zakup kredytów - {{ bot_name }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <header class="bg-blue-600 text-white shadow-lg">
+        <div class="container mx-auto px-4 py-6">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-3xl font-bold">{{ bot_name }}</h1>
+                    <p class="text-blue-100">Sklep z kredytami</p>
+                </div>
+                <nav>
+                    <a href="{{ url_for('admin_login') }}" class="bg-blue-500 hover:bg-blue-400 text-white px-3 py-1 rounded">Panel admina</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-12">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-6">
+                    {% for message in messages %}
+                        <p>{{ message }}</p>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <h2 class="text-2xl font-bold mb-6 text-center">Kup kredyty do bota {{ bot_name }}</h2>
+        
+        <div class="max-w-3xl mx-auto">
+            <p class="text-center mb-8">
+                Wybierz jeden z poniższych pakietów, aby doładować swoje konto kredytami.
+                Kredyty możesz wykorzystać do rozmów z naszym botem na Telegramie.
+            </p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {% for package in packages %}
+                    <div class="bg-white rounded-lg shadow-md overflow-hidden transition-transform transform hover:-translate-y-1 hover:shadow-lg">
+                        <div class="bg-blue-500 text-white p-4 text-center">
+                            <h3 class="text-xl font-bold">{{ package.name }}</h3>
+                        </div>
+                        <div class="p-6 text-center">
+                            <p class="text-4xl font-bold text-gray-800 mb-4">{{ package.credits }}</p>
+                            <p class="text-gray-600 mb-4">kredytów</p>
+                            <p class="text-2xl font-bold text-blue-600 mb-6">{{ package.price }} zł</p>
+                            <a href="{{ url_for('buy_credits', package_id=package.id) }}" class="block w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition">
+                                Kup teraz
+                            </a>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+            
+            <div class="mt-12 bg-gray-50 p-6 rounded-lg shadow">
+                <h3 class="text-xl font-bold mb-4">Jak to działa?</h3>
+                <ol class="list-decimal pl-5 space-y-2">
+                    <li>Wybierz pakiet kredytów, który Cię interesuje</li>
+                    <li>Wprowadź swój identyfikator Telegram (ID)</li>
+                    <li>Dokonaj płatności</li>
+                    <li>Kredyty zostaną automatycznie dodane do Twojego konta w bocie</li>
+                </ol>
+                <p class="mt-4 text-sm text-gray-600">
+                    Nie wiesz, jak znaleźć swój identyfikator Telegram? Wyślij komendę /status do naszego bota, 
+                    a otrzymasz wszystkie potrzebne informacje.
+                </p>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-gray-800 text-white py-4 mt-12">
+        <div class="container mx-auto px-4 text-center">
+            <p>© 2023 {{ bot_name }} - Wszelkie prawa zastrzeżone</p>
+        </div>
+    </footer>
+</body>
+</html>

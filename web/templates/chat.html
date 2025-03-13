@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Czat - {{ bot_name }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <!-- Highlight.js dla formatowania kodu -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <!-- Markdown-it dla parsowania Markdown -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/markdown-it/13.0.1/markdown-it.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col">
+    <header class="bg-blue-600 text-white shadow-lg">
+        <div class="container mx-auto px-4 py-3">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-2xl font-bold">{{ bot_name }}</h1>
+                </div>
+                <nav>
+                    <ul class="flex space-x-4">
+                        <li><a href="{{ url_for('dashboard') }}" class="hover:text-blue-200">Dashboard</a></li>
+                        <li><a href="{{ url_for('credits_page') }}" class="hover:text-blue-200">Kredyty: <span id="credits-counter">{{ credits }}</span></a></li>
+                        <li><a href="{{ url_for('logout') }}" class="hover:text-blue-200">Wyloguj</a></li>
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow flex">
+        <!-- Sidebar z trybami czatu -->
+        <aside class="w-64 bg-white border-r border-gray-200 p-4 hidden md:block">
+            <h3 class="text-lg font-bold mb-4">Tryby czatu</h3>
+            <ul class="space-y-2" id="chat-modes">
+                {% for mode_id, mode_info in chat_modes.items() %}
+                <li>
+                    <button 
+                        class="w-full text-left px-3 py-2 rounded hover:bg-gray-100 flex items-center chat-mode"
+                        data-mode="{{ mode_id }}"
+                        data-cost="{{ mode_info.credit_cost }}"
+                    >
+                        <span class="mr-2">{{ mode_info.name }}</span>
+                        <span class="text-xs text-gray-500 ml-auto">{{ mode_info.credit_cost }} kr.</span>
+                    </button>
+                </li>
+                {% endfor %}
+            </ul>
+            
+            <h3 class="text-lg font-bold mt-6 mb-4">Akcje</h3>
+            <ul class="space-y-2">
+                <li>
+                    <button id="new-chat-btn" class="w-full text-left px-3 py-2 rounded hover:bg-gray-100 flex items-center">
+                        <i class="fas fa-plus mr-2"></i> Nowa rozmowa
+                    </button>
+                </li>
+                <li>
+                    <button id="clear-history-btn" class="w-full text-left px-3 py-2 rounded hover:bg-gray-100 flex items-center">
+                        <i class="fas fa-trash mr-2"></i> Wyczyść historię
+                    </button>
+                </li>
+            </ul>
+        </aside>
+
+        <!-- Główny obszar czatu -->
+        <div class="flex-grow flex flex-col">
+            <!-- Wiadomości czatu -->
+            <div id="chat-messages" class="flex-grow p-4 overflow-y-auto">
+                <div class="max-w-3xl mx-auto space-y-4">
+                    <!-- Wiadomość powitalna -->
+                    <div class="flex items-start mb-4">
+                        <div class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white mr-3 flex-shrink-0">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <div class="bg-white p-3 rounded-lg shadow-sm message-content">
+                            <p>Witaj w interfejsie czatu {{ bot_name }}! Jak mogę Ci dzisiaj pomóc?</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Istniejąca historia czatu -->
+                    {% for msg in history %}
+                        <div class="flex items-start mb-4 {% if msg.is_from_user %}justify-end{% endif %}">
+                            {% if not msg.is_from_user %}
+                            <div class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white mr-3 flex-shrink-0">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                            {% endif %}
+                            
+                            <div class="{% if msg.is_from_user %}bg-blue-100{% else %}bg-white{% endif %} p-3 rounded-lg shadow-sm message-content">
+                                <div class="markdown">{{ msg.content }}</div>
+                            </div>
+                            
+                            {% if msg.is_from_user %}
+                            <div class="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-700 ml-3 flex-shrink-0">
+                                <i class="fas fa-user"></i>
+                            </div>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Pasek informacji o aktualnym trybie -->
+            <div id="mode-info" class="bg-blue-50 p-2 text-center text-sm">
+                <span>Aktualny tryb: <strong id="current-mode-name">Standardowy asystent</strong></span>
+                <span class="mx-2">|</span>
+                <span>Koszt: <strong id="current-mode-cost">1</strong> kredyt(ów) za wiadomość</span>
+            </div>
+
+            <!-- Pole wprowadzania wiadomości -->
+            <div class="border-t border-gray-200 p-4 bg-white">
+                <form id="message-form" class="max-w-3xl mx-auto">
+                    <div class="flex">
+                        <textarea 
+                            id="message-input" 
+                            class="flex-grow border border-gray-300 rounded-l-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                            placeholder="Napisz wiadomość..."
+                            rows="2"
+                        ></textarea>
+                        <button 
+                            type="submit" 
+                            class="bg-blue-600 text-white px-4 rounded-r-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-center"
+                        >
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Inicjalizacja zmiennych
+        let currentMode = 'no_mode';
+        let currentModeName = 'Brak trybu';
+        let currentModeCost = 1;
+        const md = window.markdownit();
+
+        // Funkcja do dodawania wiadomości do czatu
+        function addMessageToChat(content, isFromUser = false) {
+            const chatMessages = document.getElementById('chat-messages');
+            const messagesContainer = chatMessages.querySelector('div');
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `flex items-start mb-4 ${isFromUser ? 'justify-end' : ''}`;
+            
+            let html = '';
+            
+            if (!isFromUser) {
+                html += `
+                    <div class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white mr-3 flex-shrink-0">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                `;
+            }
+            
+            html += `
+                <div class="${isFromUser ? 'bg-blue-100' : 'bg-white'} p-3 rounded-lg shadow-sm message-content">
+                    <div class="markdown">${md.render(content)}</div>
+                </div>
+            `;
+            
+            if (isFromUser) {
+                html += `
+                    <div class="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-700 ml-3 flex-shrink-0">
+                        <i class="fas fa-user"></i>
+                    </div>
+                `;
+            }
+            
+            messageDiv.innerHTML = html;
+            messagesContainer.appendChild(messageDiv);
+            
+            // Przewiń do dołu
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            // Podświetl bloki kodu
+            messageDiv.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+        }
+
+        // Obsługa formularza wiadomości
+        document.getElementById('message-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const messageInput = document.getElementById('message-input');
+            const message = messageInput.value.trim();
+            
+            if (!message) return;
+            
+            // Dodaj wiadomość użytkownika do czatu
+            addMessageToChat(message, true);
+            messageInput.value = '';
+            
+            // Dodaj animowaną wiadomość od bota (placeholder)
+            const chatMessages = document.getElementById('chat-messages');
+            const messagesContainer = chatMessages.querySelector('div');
+            
+            const botMessageDiv = document.createElement('div');
+            botMessageDiv.className = 'flex items-start mb-4';
+            botMessageDiv.innerHTML = `
+                <div class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white mr-3 flex-shrink-0">
+                    <i class="fas fa-robot"></i>
+                </div>
+                <div class="bg-white p-3 rounded-lg shadow-sm message-content">
+                    <p id="bot-response-loading">
+                        <span class="animate-pulse">⏳ Generowanie odpowiedzi...</span>
+                    </p>
+                </div>
+            `;
+            messagesContainer.appendChild(botMessageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            try {
+                // Wysłanie wiadomości do API
+                const response = await fetch('/api/send_message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        mode: currentMode
+                    }),
+                });
+                
+                const data = await response.json();
+                
+                // Usuń placeholder
+                botMessageDiv.remove();
+                
+                if (data.status === 'success') {
+                    // Dodaj rzeczywistą odpowiedź bota
+                    addMessageToChat(data.response);
+                    
+                    // Zaktualizuj licznik kredytów
+                    document.getElementById('credits-counter').textContent = data.credits_left;
+                } else {
+                    // Obsługa błędu
+                    addMessageToChat(`Błąd: ${data.message}`);
+                }
+            } catch (error) {
+                // Usuń placeholder
+                botMessageDiv.remove();
+                
+                // Obsługa błędu
+                addMessageToChat(`Wystąpił błąd podczas komunikacji z serwerem: ${error.message}`);
+            }
+        });
+
+        // Obsługa przycisków trybów czatu
+        document.querySelectorAll('.chat-mode').forEach(button => {
+            button.addEventListener('click', function() {
+                // Usuń aktywną klasę ze wszystkich przycisków
+                document.querySelectorAll('.chat-mode').forEach(btn => {
+                    btn.classList.remove('bg-blue-100', 'font-medium');
+                });
+                
+                // Dodaj aktywną klasę do wybranego przycisku
+                this.classList.add('bg-blue-100', 'font-medium');
+                
+                // Zaktualizuj aktualny tryb
+                currentMode = this.dataset.mode;
+                currentModeCost = this.dataset.cost;
+                currentModeName = this.textContent.trim().split(/\s+/).slice(0, -1).join(' ');
+                
+                // Zaktualizuj informacje o trybie
+                document.getElementById('current-mode-name').textContent = currentModeName;
+                document.getElementById('current-mode-cost').textContent = currentModeCost;
+            });
+        });
+
+        // Obsługa przycisku nowej rozmowy
+        document.getElementById('new-chat-btn').addEventListener('click', async function() {
+            if (confirm('Czy na pewno chcesz rozpocząć nową rozmowę? Aktualna historia zostanie wyczyszczona.')) {
+                // Wyczyść historię na stronie
+                const chatMessages = document.getElementById('chat-messages');
+                const messagesContainer = chatMessages.querySelector('div');
+                messagesContainer.innerHTML = `
+                    <div class="flex items-start mb-4">
+                        <div class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white mr-3 flex-shrink-0">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <div class="bg-white p-3 rounded-lg shadow-sm message-content">
+                            <p>Rozpoczęto nową rozmowę! Jak mogę Ci dzisiaj pomóc?</p>
+                        </div>
+                    </div>
+                `;
+                
+                // Przekieruj do czystej strony czatu (opcjonalnie)
+                window.location.href = "{{ url_for('chat') }}";
+            }
+        });
+
+        // Obsługa przycisku czyszczenia historii
+        document.getElementById('clear-history-btn').addEventListener('click', function() {
+            if (confirm('Czy na pewno chcesz wyczyścić całą historię?')) {
+                // Ta sama logika co w przycisku nowej rozmowy
+                const chatMessages = document.getElementById('chat-messages');
+                const messagesContainer = chatMessages.querySelector('div');
+                messagesContainer.innerHTML = `
+                    <div class="flex items-start mb-4">
+                        <div class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white mr-3 flex-shrink-0">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <div class="bg-white p-3 rounded-lg shadow-sm message-content">
+                            <p>Historia została wyczyszczona! Jak mogę Ci dzisiaj pomóc?</p>
+                        </div>
+                    </div>
+                `;
+                
+                // Przekieruj do czystej strony czatu (opcjonalnie)
+                window.location.href = "{{ url_for('chat') }}";
+            }
+        });
+
+        // Renderowanie wiadomości Markdown po załadowaniu strony
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.markdown').forEach(el => {
+                // Renderuj Markdown, jeśli zawartość nie jest już HTML
+                if (!el.innerHTML.trim().startsWith('<')) {
+                    el.innerHTML = md.render(el.textContent);
+                }
+                
+                // Podświetl bloki kodu
+                el.querySelectorAll('pre code').forEach((block) => {
+                    hljs.highlightElement(block);
+                });
+            });
+            
+            // Przewiń do dołu po załadowaniu
+            const chatMessages = document.getElementById('chat-messages');
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        });
+    </script>
+</body>
+</html>

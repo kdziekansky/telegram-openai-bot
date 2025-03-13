@@ -10,17 +10,18 @@ from telegram.ext import (
 )
 from telegram.constants import ParseMode, ChatAction
 from config import (
-    TELEGRAM_TOKEN, DEFAULT_MODEL, SUBSCRIPTION_EXPIRED_MESSAGE, 
-    MAX_CONTEXT_MESSAGES, AVAILABLE_MODELS, WELCOME_MESSAGE, 
-    CHAT_MODES, BOT_NAME, CREDIT_COSTS
+    TELEGRAM_TOKEN, DEFAULT_MODEL, AVAILABLE_MODELS, 
+    MAX_CONTEXT_MESSAGES, CHAT_MODES, BOT_NAME, CREDIT_COSTS
 )
+
+# Import funkcji z modułu tłumaczeń
+from utils.translations import get_text
 
 # Import funkcji z modułu sqlite_client
 from database.sqlite_client import (
-    get_or_create_user, check_active_subscription, 
-    get_subscription_end_date, create_new_conversation, 
+    get_or_create_user, create_new_conversation, 
     get_active_conversation, save_message, 
-    get_conversation_history
+    get_conversation_history, get_message_status
 )
 
 # Import funkcji obsługi kredytów
@@ -35,14 +36,25 @@ from handlers.credit_handler import (
     credit_stats_command
 )
 
+# Import handlerów kodu aktywacyjnego
+from handlers.code_handler import (
+    code_command, admin_generate_code
+)
+
+# Import handlerów menu
+from handlers.menu_handler import (
+    show_main_menu, handle_menu_selection, handle_settings_callback,
+    set_user_name, get_user_language
+)
+
+# Import handlera start
+from handlers.start_handler import (
+    start_command, handle_language_selection
+)
+
 from utils.openai_client import (
     chat_completion_stream, prepare_messages_from_history,
     generate_image_dall_e, analyze_document, analyze_image
-)
-
-from handlers.menu_handler import (
-    show_main_menu, handle_menu_selection, handle_settings_callback,
-    set_user_name
 )
 
 # Konfiguracja loggera
@@ -57,39 +69,6 @@ ADMIN_USER_IDS = [123456789]  # Zastąp swoim ID użytkownika Telegram
 
 # Handlers dla podstawowych komend
 
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Obsługa komendy /start
-    Tworzy lub pobiera użytkownika z bazy danych i wyświetla wiadomość powitalną
-    """
-    user = update.effective_user
-    
-    # Zapis użytkownika do bazy danych
-    get_or_create_user(
-        user_id=user.id,
-        username=user.username,
-        first_name=user.first_name,
-        last_name=user.last_name,
-        language_code=user.language_code
-    )
-    
-    # Sprawdź, czy użytkownik ma już kredyty
-    credits = get_user_credits(user.id)
-    
-    # Jeśli nowy użytkownik, dodaj darmowe kredyty startowe
-    if credits == 0:
-        add_user_credits(user.id, 10, "Darmowe kredyty startowe")
-        credits = 10
-    
-    # Przygotowanie wiadomości powitalnej
-    welcome_text = WELCOME_MESSAGE
-    welcome_text += f"\n\nTwój aktualny stan kredytów: *{credits}* kredytów"
-    
-    await update.message.reply_text(welcome_text, parse_mode=ParseMode.MARKDOWN)
-    
-    # Pokaż menu główne
-    await show_main_menu(update, context)
-
 async def restart_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Obsługa komendy /restart
@@ -97,6 +76,7 @@ async def restart_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bez ponownej rejestracji użytkownika
     """
     user_id = update.effective_user.id
+    language = get_user_language(context, user_id)
     
     # Sprawdzanie statusu kredytów
     credits = get_user_credits(user_id)
@@ -121,16 +101,7 @@ async def restart_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     restart_text = f"""
 🔄 *{BOT_NAME} został zrestartowany*
 
-Dostępne komendy:
-/start - Pokaż wiadomość powitalną
-/credits - Sprawdź saldo kredytów i kup więcej
-/buy - Kup pakiet kredytów
-/status - Sprawdź stan konta
-/newchat - Rozpocznij nową konwersację
-/mode - Wybierz tryb czatu
-/image [opis] - Wygeneruj obraz (koszt: 10 kredytów)
-/restart - Pokaż tę wiadomość
-/menu - Pokaż menu główne
+{get_text("help_text", language)}
 """
     
     # Dodaj informacje o aktualnych ustawieniach
@@ -160,17 +131,10 @@ async def check_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Użycie: /status
     """
     user_id = update.effective_user.id
+    language = get_user_language(context, user_id)
     
     # Pobierz status kredytów
     credits = get_user_credits(user_id)
-    
-    # Pobierz datę końca subskrypcji (jeśli istnieje)
-    end_date = get_subscription_end_date(user_id)
-    subscription_info = ""
-    
-    if end_date and end_date > datetime.datetime.now(pytz.UTC):
-        formatted_date = end_date.strftime('%d.%m.%Y %H:%M')
-        subscription_info = f"\nTwoja subskrypcja czasowa jest aktywna do: *{formatted_date}*"
     
     # Pobranie aktualnego trybu czatu
     current_mode = "brak" 
@@ -187,7 +151,6 @@ async def check_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 Dostępne kredyty: *{credits}*
 Aktualny tryb: *{current_mode}* (koszt: {current_mode_cost} kredyt(ów) za wiadomość)
-{subscription_info}
 
 Koszty operacji:
 • Standardowa wiadomość (GPT-3.5): 1 kredyt
@@ -205,17 +168,27 @@ Aby dokupić więcej kredytów, użyj komendy /buy.
 async def new_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Rozpoczyna nową konwersację"""
     user_id = update.effective_user.id
+    language = get_user_language(context, user_id)
     
     # Utwórz nową konwersację
     conversation = create_new_conversation(user_id)
     
     if conversation:
-        await update.message.reply_text("Rozpoczęto nową konwersację. Możesz teraz zadać pytanie.")
+        await update.message.reply_text(
+            "Rozpoczęto nową konwersację. Możesz teraz zadać pytanie.",
+            parse_mode=ParseMode.MARKDOWN
+        )
     else:
-        await update.message.reply_text("Wystąpił błąd podczas tworzenia nowej konwersacji.")
+        await update.message.reply_text(
+            "Wystąpił błąd podczas tworzenia nowej konwersacji.",
+            parse_mode=ParseMode.MARKDOWN
+        )
 
-async def show_models(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def show_models(update: Update, context: ContextTypes.DEFAULT_TYPE, edit_message=False, callback_query=None):
     """Pokazuje dostępne modele AI"""
+    user_id = update.effective_user.id if hasattr(update, 'effective_user') else callback_query.from_user.id
+    language = get_user_language(context, user_id)
+    
     # Utwórz przyciski dla dostępnych modeli
     keyboard = []
     for model_id, model_name in AVAILABLE_MODELS.items():
@@ -230,19 +203,26 @@ async def show_models(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await update.message.reply_text(
-        "Wybierz model AI, którego chcesz używać:",
-        reply_markup=reply_markup
-    )
+    if edit_message and callback_query:
+        await callback_query.edit_message_text(
+            get_text("settings_choose_model", language),
+            reply_markup=reply_markup
+        )
+    else:
+        await update.message.reply_text(
+            get_text("settings_choose_model", language),
+            reply_markup=reply_markup
+        )
 
 async def show_modes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Pokazuje dostępne tryby czatu"""
     user_id = update.effective_user.id
+    language = get_user_language(context, user_id)
     
     # Sprawdź, czy użytkownik ma kredyty
     credits = get_user_credits(user_id)
     if credits <= 0:
-        await update.message.reply_text(SUBSCRIPTION_EXPIRED_MESSAGE)
+        await update.message.reply_text(get_text("subscription_expired", language))
         return
     
     # Utwórz przyciski dla dostępnych trybów
@@ -258,7 +238,7 @@ async def show_modes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await update.message.reply_text(
-        "Wybierz tryb czatu, którego chcesz używać:",
+        get_text("settings_choose_model", language),
         reply_markup=reply_markup
     )
 
@@ -266,6 +246,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Obsługa wiadomości tekstowych od użytkownika ze strumieniowaniem odpowiedzi"""
     user_id = update.effective_user.id
     user_message = update.message.text
+    language = get_user_language(context, user_id)
     
     # Sprawdź, czy to nie jest komenda z menu
     is_menu_command = await handle_menu_selection(update, context)
@@ -284,7 +265,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Sprawdź, czy użytkownik ma wystarczającą liczbę kredytów
     if not check_user_credits(user_id, credit_cost):
-        await update.message.reply_text(SUBSCRIPTION_EXPIRED_MESSAGE)
+        await update.message.reply_text(get_text("subscription_expired", language))
         return
     
     # Pobierz lub utwórz aktywną konwersację
@@ -318,7 +299,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     messages = prepare_messages_from_history(history, user_message, system_prompt)
     
     # Wyślij początkową pustą wiadomość, którą będziemy aktualizować
-    response_message = await update.message.reply_text("⏳ Generowanie odpowiedzi...")
+    response_message = await update.message.reply_text(get_text("generating_response", language))
     
     # Zainicjuj pełną odpowiedź
     full_response = ""
@@ -367,11 +348,12 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Obsługa przesłanych dokumentów"""
     user_id = update.effective_user.id
+    language = get_user_language(context, user_id)
     
     # Sprawdź, czy użytkownik ma wystarczającą liczbę kredytów
     credit_cost = CREDIT_COSTS["document"]
     if not check_user_credits(user_id, credit_cost):
-        await update.message.reply_text(SUBSCRIPTION_EXPIRED_MESSAGE)
+        await update.message.reply_text(get_text("subscription_expired", language))
         return
     
     document = update.message.document
@@ -383,7 +365,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # Pobierz plik
-    message = await update.message.reply_text("Analizuję plik, proszę czekać...")
+    message = await update.message.reply_text(get_text("analyzing_document", language))
     
     # Wyślij informację o aktywności bota
     await update.message.chat.send_action(action=ChatAction.TYPING)
@@ -415,18 +397,19 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Obsługa przesłanych zdjęć"""
     user_id = update.effective_user.id
+    language = get_user_language(context, user_id)
     
     # Sprawdź, czy użytkownik ma wystarczającą liczbę kredytów
     credit_cost = CREDIT_COSTS["photo"]
     if not check_user_credits(user_id, credit_cost):
-        await update.message.reply_text(SUBSCRIPTION_EXPIRED_MESSAGE)
+        await update.message.reply_text(get_text("subscription_expired", language))
         return
     
     # Wybierz zdjęcie o najwyższej rozdzielczości
     photo = update.message.photo[-1]
     
     # Pobierz zdjęcie
-    message = await update.message.reply_text("Analizuję zdjęcie, proszę czekać...")
+    message = await update.message.reply_text(get_text("analyzing_photo", language))
     
     # Wyślij informację o aktywności bota
     await update.message.chat.send_action(action=ChatAction.TYPING)
@@ -461,13 +444,14 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Użycie: /image [opis obrazu]
     """
     user_id = update.effective_user.id
+    language = get_user_language(context, user_id)
     
     # Sprawdź, czy użytkownik ma wystarczającą liczbę kredytów
     quality = "standard"  # domyślna jakość
     credit_cost = CREDIT_COSTS["image"][quality]
     
     if not check_user_credits(user_id, credit_cost):
-        await update.message.reply_text(SUBSCRIPTION_EXPIRED_MESSAGE)
+        await update.message.reply_text(get_text("subscription_expired", language))
         return
     
     # Sprawdź, czy podano opis obrazu
@@ -478,7 +462,7 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     prompt = ' '.join(context.args)
     
     # Powiadom użytkownika o rozpoczęciu generowania
-    message = await update.message.reply_text("Generuję obraz, proszę czekać...")
+    message = await update.message.reply_text(get_text("generating_image", language))
     
     # Wyślij informację o aktywności bota
     await update.message.chat.send_action(action=ChatAction.UPLOAD_PHOTO)
@@ -533,6 +517,10 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
     elif query.data.startswith("buy_") or query.data == "buy_credits":
         await handle_credit_callback(update, context)
     
+    # Obsługa callbacków języka przy pierwszym uruchomieniu
+    elif query.data.startswith("start_lang_"):
+        await handle_language_selection(update, context)
+    
     # Obsługa innych callbacków (ustawienia, historia itp.)
     elif query.data.startswith("settings_") or query.data.startswith("lang_") or query.data.startswith("history_"):
         await handle_settings_callback(update, context)
@@ -541,10 +529,11 @@ async def handle_model_selection(update: Update, context: ContextTypes.DEFAULT_T
     """Obsługa wyboru modelu AI"""
     query = update.callback_query
     user_id = query.from_user.id
+    language = get_user_language(context, user_id)
     
     # Sprawdź, czy model istnieje
     if model_id not in AVAILABLE_MODELS:
-        await query.edit_message_text("Wybrany model nie jest dostępny.")
+        await query.edit_message_text(get_text("model_not_available", language))
         return
     
     # Zapisz wybrany model w kontekście użytkownika
@@ -561,7 +550,7 @@ async def handle_model_selection(update: Update, context: ContextTypes.DEFAULT_T
     
     model_name = AVAILABLE_MODELS[model_id]
     await query.edit_message_text(
-        f"Wybrany model: *{model_name}*\nKoszt: *{credit_cost}* kredyt(ów) za wiadomość\n\nMożesz teraz zadać pytanie.", 
+        get_text("model_selected", language, model=model_name, credits=credit_cost), 
         parse_mode=ParseMode.MARKDOWN
     )
 
@@ -569,10 +558,11 @@ async def handle_mode_selection(update: Update, context: ContextTypes.DEFAULT_TY
     """Obsługa wyboru trybu czatu"""
     query = update.callback_query
     user_id = query.from_user.id
+    language = get_user_language(context, user_id)
     
     # Sprawdź, czy tryb istnieje
     if mode_id not in CHAT_MODES:
-        await query.edit_message_text("Wybrany tryb nie jest dostępny.")
+        await query.edit_message_text(get_text("model_not_available", language))
         return
     
     # Zapisz wybrany tryb w kontekście użytkownika
@@ -695,13 +685,14 @@ Nazwa użytkownika: {user.get('username', 'Brak')}
 Imię: {user.get('first_name', 'Brak')}
 Nazwisko: {user.get('last_name', 'Brak')}
 Język: {user.get('language_code', 'Brak')}
+Język interfejsu: {user.get('language', 'pl')}
 Subskrypcja do: {subscription_end}
 Aktywny: {'Tak' if user.get('is_active', False) else 'Nie'}
 Data rejestracji: {user.get('created_at', 'Brak')}
 
 *Status kredytów:*
 Dostępne kredyty: *{credits}*
-    """
+"""
     
     await update.message.reply_text(info, parse_mode=ParseMode.MARKDOWN)
 
@@ -721,6 +712,11 @@ def main():
     application.add_handler(CommandHandler("image", generate_image))
     application.add_handler(CommandHandler("restart", restart_command))
     application.add_handler(CommandHandler("menu", menu_command))
+    application.add_handler(CommandHandler("setname", set_user_name))
+    
+    # Dodanie handlerów kodów aktywacyjnych
+    application.add_handler(CommandHandler("code", code_command))
+    application.add_handler(CommandHandler("gencode", admin_generate_code))
     
     # Dodanie handlerów kredytów
     application.add_handler(CommandHandler("credits", credits_command))
@@ -745,4 +741,9 @@ def main():
     application.run_polling()
 
 if __name__ == '__main__':
+    # Aktualizacja bazy danych przed uruchomieniem
+    from update_database import run_all_updates
+    run_all_updates()
+    
+    # Uruchomienie bota
     main()

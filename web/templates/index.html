@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ bot_name }} - Inteligentny asystent AI</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <header class="bg-blue-600 text-white shadow-lg">
+        <div class="container mx-auto px-4 py-6">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-3xl font-bold">{{ bot_name }}</h1>
+                    <p class="text-blue-100">Twój inteligentny asystent AI</p>
+                </div>
+                <nav>
+                    <ul class="flex space-x-4">
+                        <li><a href="{{ url_for('login') }}" class="bg-blue-500 hover:bg-blue-400 text-white px-4 py-2 rounded">Logowanie</a></li>
+                        <li><a href="{{ url_for('register') }}" class="bg-green-500 hover:bg-green-400 text-white px-4 py-2 rounded">Rejestracja</a></li>
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-12">
+        <section class="mb-16 text-center">
+            <h2 class="text-4xl font-bold mb-6">Potężny AI dostępny dla Ciebie</h2>
+            <p class="text-xl text-gray-600 max-w-3xl mx-auto">
+                Poznaj {{ bot_name }} - zaawansowany asystent AI, który pomoże Ci w wielu zadaniach:
+                od odpowiadania na pytania po generowanie obrazów i analizowanie dokumentów.
+            </p>
+            <div class="mt-8">
+                <a href="{{ url_for('register') }}" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-lg text-lg font-semibold inline-block">Rozpocznij za darmo</a>
+                <p class="text-gray-500 mt-2">Otrzymasz 10 darmowych kredytów na start!</p>
+            </div>
+        </section>
+
+        <section class="grid md:grid-cols-3 gap-8 mb-16">
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <div class="text-blue-500 text-4xl mb-4">💬</div>
+                <h3 class="text-xl font-bold mb-2">Czatuj z AI</h3>
+                <p class="text-gray-600">Zadawaj pytania, prowadź rozmowy i otrzymuj szczegółowe odpowiedzi od zaawansowanych modeli AI.</p>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <div class="text-blue-500 text-4xl mb-4">🖼️</div>
+                <h3 class="text-xl font-bold mb-2">Generuj obrazy</h3>
+                <p class="text-gray-600">Twórz unikalne i kreatywne obrazy na podstawie Twoich opisów tekstowych.</p>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <div class="text-blue-500 text-4xl mb-4">📄</div>
+                <h3 class="text-xl font-bold mb-2">Analizuj dokumenty</h3>
+                <p class="text-gray-600">Przesyłaj pliki i zdjęcia do analizy i otrzymuj szczegółowe informacje o ich zawartości.</p>
+            </div>
+        </section>
+
+        <section class="bg-blue-50 p-8 rounded-lg mb-16">
+            <h2 class="text-2xl font-bold mb-4 text-center">Korzystaj z różnorodnych trybów czatu:</h2>
+            <div class="grid md:grid-cols-4 gap-4 mt-6">
+                <div class="bg-white p-4 rounded shadow-sm">
+                    <h4 class="font-bold">👨‍💼 Asystent</h4>
+                    <p class="text-sm">Pomocny asystent odpowiadający na Twoje pytania</p>
+                </div>
+                <div class="bg-white p-4 rounded shadow-sm">
+                    <h4 class="font-bold">👨‍💻 Programista</h4>
+                    <p class="text-sm">Pomoc w pisaniu czystego i wydajnego kodu</p>
+                </div>
+                <div class="bg-white p-4 rounded shadow-sm">
+                    <h4 class="font-bold">✍️ Kreatywny Pisarz</h4>
+                    <p class="text-sm">Tworzenie oryginalnych tekstów i opowiadań</p>
+                </div>
+                <div class="bg-white p-4 rounded shadow-sm">
+                    <h4 class="font-bold">💼 Konsultant Biznesowy</h4>
+                    <p class="text-sm">Pomoc w planowaniu strategicznym i analizie rynku</p>
+                </div>
+            </div>
+            <p class="text-center mt-4 text-gray-600">
+                I wiele więcej! Odkryj wszystkie tryby po zalogowaniu.
+            </p>
+        </section>
+
+        <section class="text-center">
+            <h2 class="text-2xl font-bold mb-4">Gotowy, by rozpocząć?</h2>
+            <a href="{{ url_for('register') }}" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-lg text-lg font-semibold inline-block">Utwórz konto</a>
+            <p class="mt-2 text-gray-600">Lub <a href="https://t.me/twoj_bot" class="text-blue-600 hover:underline">wypróbuj naszego bota Telegram</a></p>
+        </section>
+    </main>
+
+    <footer class="bg-gray-800 text-white py-8">
+        <div class="container mx-auto px-4">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="mb-4 md:mb-0">
+                    <h3 class="text-xl font-bold">{{ bot_name }}</h3>
+                    <p class="text-gray-400">© 2023 Wszelkie prawa zastrzeżone</p>
+                </div>
+                <div>
+                    <ul class="flex space-x-4">
+                        <li><a href="#" class="text-gray-400 hover:text-white">Warunki korzystania</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white">Polityka prywatności</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white">Kontakt</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

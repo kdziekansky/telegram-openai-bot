@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zakup pomyślny - {{ bot_name }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <header class="bg-blue-600 text-white shadow-lg">
+        <div class="container mx-auto px-4 py-6">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-3xl font-bold">{{ bot_name }}</h1>
+                    <p class="text-blue-100">Zakup pomyślny</p>
+                </div>
+                <nav>
+                    <a href="{{ url_for('index') }}" class="bg-blue-500 hover:bg-blue-400 text-white px-3 py-1 rounded">Powrót do sklepu</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-12">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6">
+                    {% for message in messages %}
+                        <p>{{ message }}</p>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <div class="max-w-md mx-auto bg-white rounded-lg shadow-md overflow-hidden">
+            <div class="bg-green-500 text-white p-6 text-center">
+                <div class="rounded-full bg-white h-20 w-20 flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-check text-green-500 text-4xl"></i>
+                </div>
+                <h2 class="text-2xl font-bold">Zakup zakończony pomyślnie!</h2>
+            </div>
+            
+            <div class="p-6 text-center">
+                <p class="mb-4">
+                    Twoje kredyty zostały pomyślnie dodane do Twojego konta. 
+                    Teraz możesz korzystać z nich w rozmowach z naszym botem na Telegramie.
+                </p>
+                
+                <div class="bg-gray-50 p-4 rounded-lg mb-6">
+                    <p class="text-gray-600">Aby sprawdzić aktualny stan kredytów, użyj komendy</p>
+                    <p class="font-mono bg-gray-200 p-2 rounded mt-2">/credits</p>
+                </div>
+                
+                <div class="flex flex-col space-y-3">
+                    <a href="https://t.me/twoj_bot" class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded transition">
+                        <i class="fab fa-telegram mr-2"></i> Przejdź do bota na Telegramie
+                    </a>
+                    <a href="{{ url_for('index') }}" class="bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded transition">
+                        Wróć do sklepu
+                    </a>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-gray-800 text-white py-4 mt-12">
+        <div class="container mx-auto px-4 text-center">
+            <p>© 2023 {{ bot_name }} - Wszelkie prawa zastrzeżone</p>
+        </div>
+    </footer>
+</body>
+</html>

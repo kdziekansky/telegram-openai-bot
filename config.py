@@ -55,6 +55,13 @@ CREDIT_PACKAGES = [
     {"id": 5, "name": "Biznes", "credits": 5000, "price": 179.99}
 ]
 
+# Dostępne języki
+AVAILABLE_LANGUAGES = {
+    "pl": "Polski 🇵🇱",
+    "en": "English 🇬🇧",
+    "ru": "Русский 🇷🇺"
+}
+
 # Tryby czatu (odpowiednik szablonów promptów)
 CHAT_MODES = {
     "no_mode": {
@@ -177,71 +184,8 @@ SUBSCRIPTION_PLANS = {
 # Maksymalna długość kontekstu (historia konwersacji)
 MAX_CONTEXT_MESSAGES = 20
 
-# Komunikaty
-WELCOME_MESSAGE = f"""Witaj w {BOT_NAME}! 🤖✨
+# Program referencyjny
+REFERRAL_CREDITS = 50  # Kredyty za zaproszenie nowego użytkownika
+REFERRAL_BONUS = 25    # Bonus dla zaproszonego użytkownika
 
-Jestem zaawansowanym botem AI, który pomoże Ci w wielu zadaniach - od odpowiadania na pytania po generowanie obrazów.
-
-Do korzystania z moich funkcji potrzebujesz kredytów. Sprawdź swoje saldo i dostępne pakiety za pomocą komendy /credits.
-
-Dostępne komendy:
-/start - Pokaż tę wiadomość
-/credits - Sprawdź saldo kredytów i kup więcej
-/buy - Kup pakiet kredytów
-/status - Sprawdź stan konta
-/newchat - Rozpocznij nową konwersację
-/mode - Wybierz tryb czatu
-/image [opis] - Wygeneruj obraz (koszt: 10 kredytów)
-/restart - Odśwież informacje o bocie
-/menu - Pokaż menu główne
-"""
-
-SUBSCRIPTION_EXPIRED_MESSAGE = """Nie masz wystarczającej liczby kredytów, aby wykonać tę operację. 
-
-Kup kredyty za pomocą komendy /buy lub sprawdź swoje saldo za pomocą komendy /credits.
-"""
-
-CREDITS_INFO_MESSAGE = """💰 *Twoje kredyty w {bot_name}* 💰
-
-Aktualny stan: *{credits}* kredytów
-
-Koszt operacji:
-• Standardowa wiadomość (GPT-3.5): 1 kredyt
-• Wiadomość Premium (GPT-4o): 3 kredyty
-• Wiadomość Ekspercka (GPT-4): 5 kredytów
-• Obraz DALL-E: 10-15 kredytów
-• Analiza dokumentu: 5 kredytów
-• Analiza zdjęcia: 8 kredytów
-
-Użyj komendy /buy aby kupić więcej kredytów.
-"""
-
-BUY_CREDITS_MESSAGE = """🛒 *Kup kredyty* 🛒
-
-Wybierz pakiet kredytów:
-
-{packages}
-
-Aby kupić, użyj komendy:
-/buy [numer_pakietu]
-
-Na przykład, aby kupić pakiet Standard:
-/buy 2
-"""
-
-CREDIT_PURCHASE_SUCCESS = """✅ *Zakup zakończony pomyślnie!*
-
-Kupiłeś pakiet *{package_name}*
-Dodano *{credits}* kredytów do Twojego konta
-Koszt: *{price} zł*
-
-Obecny stan kredytów: *{total_credits}*
-
-Dziękujemy za zakup! 🎉
-"""
-
-LICENSE_ACTIVATED_MESSAGE = """Licencja została pomyślnie aktywowana! 
-Twój pakiet zawiera {message_limit} wiadomości.
-"""
-
-INVALID_LICENSE_MESSAGE = "Podany klucz licencyjny jest nieprawidłowy lub został już wykorzystany."
+# Nie używaj tłumaczeń bezpośrednio z config.py - użyj funkcji z modułu translations
