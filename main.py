@@ -12,27 +12,38 @@ from telegram.constants import ParseMode, ChatAction
 from config import (
     TELEGRAM_TOKEN, DEFAULT_MODEL, SUBSCRIPTION_EXPIRED_MESSAGE, 
     MAX_CONTEXT_MESSAGES, AVAILABLE_MODELS, WELCOME_MESSAGE, 
-    LICENSE_ACTIVATED_MESSAGE, INVALID_LICENSE_MESSAGE,
-    MESSAGE_PLANS
+    CHAT_MODES, BOT_NAME, CREDIT_COSTS
 )
 
 # Import funkcji z modułu sqlite_client
 from database.sqlite_client import (
     get_or_create_user, check_active_subscription, 
-    get_subscription_end_date, activate_user_license,
-    create_new_conversation, get_active_conversation,
-    save_message, get_conversation_history,
-    get_prompt_templates, get_prompt_template_by_id,
-    save_prompt_template, create_license,
-    check_message_limit, increment_messages_used,
-    get_message_status
+    get_subscription_end_date, create_new_conversation, 
+    get_active_conversation, save_message, 
+    get_conversation_history
+)
+
+# Import funkcji obsługi kredytów
+from database.credits_client import (
+    get_user_credits, add_user_credits, deduct_user_credits, 
+    check_user_credits
+)
+
+# Import handlerów kredytów
+from handlers.credit_handler import (
+    credits_command, buy_command, handle_credit_callback,
+    credit_stats_command
 )
 
 from utils.openai_client import (
-    chat_completion, prepare_messages_from_history,
+    chat_completion_stream, prepare_messages_from_history,
     generate_image_dall_e, analyze_document, analyze_image
 )
-from prompts.templates import initialize_templates_in_database
+
+from handlers.menu_handler import (
+    show_main_menu, handle_menu_selection, handle_settings_callback,
+    set_user_name
+)
 
 # Konfiguracja loggera
 logging.basicConfig(
@@ -42,7 +53,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Lista ID administratorów bota - tutaj należy dodać swoje ID
-ADMIN_USER_IDS = [1743680448, 787188598]  # Lista dwóch administratorów
+ADMIN_USER_IDS = [123456789]  # Zastąp swoim ID użytkownika Telegram
 
 # Handlers dla podstawowych komend
 
@@ -62,66 +73,96 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         language_code=user.language_code
     )
     
-    # Sprawdzanie statusu użytkownika
-    message_status = get_message_status(user.id)
-    has_subscription = check_active_subscription(user.id)
+    # Sprawdź, czy użytkownik ma już kredyty
+    credits = get_user_credits(user.id)
+    
+    # Jeśli nowy użytkownik, dodaj darmowe kredyty startowe
+    if credits == 0:
+        add_user_credits(user.id, 10, "Darmowe kredyty startowe")
+        credits = 10
     
     # Przygotowanie wiadomości powitalnej
     welcome_text = WELCOME_MESSAGE
-    
-    if has_subscription:
-        # Sprawdź subskrypcję czasową
-        end_date = get_subscription_end_date(user.id)
-        if end_date and end_date > datetime.datetime.now(pytz.UTC):
-            formatted_date = end_date.strftime('%d.%m.%Y %H:%M')
-            welcome_text += f"\n\nTwoja subskrypcja jest aktywna do: *{formatted_date}*"
-        
-        # Dodaj informację o dostępnych wiadomościach
-        if message_status["messages_limit"] > 0:
-            welcome_text += f"\n\nDostępne wiadomości: *{message_status['messages_left']}* z *{message_status['messages_limit']}*"
-    else:
-        welcome_text += "\n\nNie masz aktywnej subskrypcji ani dostępnych wiadomości. Aby korzystać z bota, aktywuj licencję."
+    welcome_text += f"\n\nTwój aktualny stan kredytów: *{credits}* kredytów"
     
     await update.message.reply_text(welcome_text, parse_mode=ParseMode.MARKDOWN)
+    
+    # Pokaż menu główne
+    await show_main_menu(update, context)
 
-async def activate_license(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def restart_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Aktywuje licencję dla użytkownika
-    Użycie: /activate [klucz_licencyjny]
+    Obsługa komendy /restart
+    Pokazuje informacje o bocie, dostępnych komendach i aktualnych ustawieniach użytkownika
+    bez ponownej rejestracji użytkownika
     """
     user_id = update.effective_user.id
     
-    # Sprawdź, czy podano klucz licencyjny
-    if not context.args or len(context.args) < 1:
-        await update.message.reply_text("Użycie: /activate [klucz_licencyjny]")
-        return
+    # Sprawdzanie statusu kredytów
+    credits = get_user_credits(user_id)
     
-    license_key = context.args[0]
+    # Pobranie aktualnego trybu czatu
+    current_mode = "brak" 
+    current_mode_cost = 1
+    if 'user_data' in context.chat_data and user_id in context.chat_data['user_data']:
+        user_data = context.chat_data['user_data'][user_id]
+        if 'current_mode' in user_data and user_data['current_mode'] in CHAT_MODES:
+            current_mode = CHAT_MODES[user_data['current_mode']]["name"]
+            current_mode_cost = CHAT_MODES[user_data['current_mode']]["credit_cost"]
     
-    # Aktywuj licencję
-    success, end_date, message_limit = activate_user_license(user_id, license_key)
+    # Pobranie aktualnego modelu
+    current_model = DEFAULT_MODEL
+    if 'user_data' in context.chat_data and user_id in context.chat_data['user_data']:
+        user_data = context.chat_data['user_data'][user_id]
+        if 'current_model' in user_data and user_data['current_model'] in AVAILABLE_MODELS:
+            current_model = AVAILABLE_MODELS[user_data['current_model']]
     
-    if success:
-        message_info = f"Licencja została pomyślnie aktywowana!\nTwój pakiet zawiera *{message_limit}* wiadomości."
-        
-        # Dodaj informację o dacie końca subskrypcji, jeśli istnieje
-        if end_date:
-            formatted_date = end_date.strftime('%d.%m.%Y %H:%M')
-            message_info += f"\nTwoja subskrypcja jest ważna do: *{formatted_date}*"
-        
-        await update.message.reply_text(message_info, parse_mode=ParseMode.MARKDOWN)
-    else:
-        await update.message.reply_text(INVALID_LICENSE_MESSAGE)
+    # Przygotowanie wiadomości
+    restart_text = f"""
+🔄 *{BOT_NAME} został zrestartowany*
 
-async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE):
+Dostępne komendy:
+/start - Pokaż wiadomość powitalną
+/credits - Sprawdź saldo kredytów i kup więcej
+/buy - Kup pakiet kredytów
+/status - Sprawdź stan konta
+/newchat - Rozpocznij nową konwersację
+/mode - Wybierz tryb czatu
+/image [opis] - Wygeneruj obraz (koszt: 10 kredytów)
+/restart - Pokaż tę wiadomość
+/menu - Pokaż menu główne
+"""
+    
+    # Dodaj informacje o aktualnych ustawieniach
+    restart_text += f"\n*Aktualne ustawienia:*"
+    restart_text += f"\nTryb czatu: {current_mode} (koszt: {current_mode_cost} kredyt(ów) za wiadomość)"
+    restart_text += f"\nModel AI: {current_model}"
+    restart_text += f"\nAktualny stan kredytów: *{credits}* kredytów"
+    
+    # Dodaj informację o rozpoczęciu nowej rozmowy
+    restart_text += "\n\nMożesz teraz zadać nowe pytanie lub użyć komendy /newchat, aby rozpocząć zupełnie nową konwersację."
+    
+    await update.message.reply_text(restart_text, parse_mode=ParseMode.MARKDOWN)
+    
+    # Pokaż menu główne
+    await show_main_menu(update, context)
+
+async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Obsługa komendy /menu
+    Wyświetla menu główne bota
+    """
+    await show_main_menu(update, context)
+
+async def check_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Sprawdza status konta użytkownika
     Użycie: /status
     """
     user_id = update.effective_user.id
     
-    # Pobierz status wiadomości
-    message_status = get_message_status(user_id)
+    # Pobierz status kredytów
+    credits = get_user_credits(user_id)
     
     # Pobierz datę końca subskrypcji (jeśli istnieje)
     end_date = get_subscription_end_date(user_id)
@@ -131,15 +172,32 @@ async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE)
         formatted_date = end_date.strftime('%d.%m.%Y %H:%M')
         subscription_info = f"\nTwoja subskrypcja czasowa jest aktywna do: *{formatted_date}*"
     
+    # Pobranie aktualnego trybu czatu
+    current_mode = "brak" 
+    current_mode_cost = 1
+    if 'user_data' in context.chat_data and user_id in context.chat_data['user_data']:
+        user_data = context.chat_data['user_data'][user_id]
+        if 'current_mode' in user_data and user_data['current_mode'] in CHAT_MODES:
+            current_mode = CHAT_MODES[user_data['current_mode']]["name"]
+            current_mode_cost = CHAT_MODES[user_data['current_mode']]["credit_cost"]
+    
     # Stwórz wiadomość o statusie
     message = f"""
-*Status twojego konta:*
+*Status twojego konta w {BOT_NAME}:*
 
-Dostępne wiadomości: *{message_status['messages_left']}* z *{message_status['messages_limit']}*
-Wykorzystane wiadomości: *{message_status['messages_used']}*
+Dostępne kredyty: *{credits}*
+Aktualny tryb: *{current_mode}* (koszt: {current_mode_cost} kredyt(ów) za wiadomość)
 {subscription_info}
 
-Aby dokupić więcej wiadomości, użyj komendy /activate z nowym kluczem licencyjnym.
+Koszty operacji:
+• Standardowa wiadomość (GPT-3.5): 1 kredyt
+• Wiadomość Premium (GPT-4o): 3 kredyty
+• Wiadomość Ekspercka (GPT-4): 5 kredytów
+• Obraz DALL-E: 10-15 kredytów
+• Analiza dokumentu: 5 kredytów
+• Analiza zdjęcia: 8 kredytów
+
+Aby dokupić więcej kredytów, użyj komendy /buy.
 """
     
     await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN)
@@ -147,11 +205,6 @@ Aby dokupić więcej wiadomości, użyj komendy /activate z nowym kluczem licenc
 async def new_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Rozpoczyna nową konwersację"""
     user_id = update.effective_user.id
-    
-    # Sprawdź, czy użytkownik ma aktywną subskrypcję
-    if not check_active_subscription(user_id):
-        await update.message.reply_text(SUBSCRIPTION_EXPIRED_MESSAGE)
-        return
     
     # Utwórz nową konwersację
     conversation = create_new_conversation(user_id)
@@ -166,7 +219,14 @@ async def show_models(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Utwórz przyciski dla dostępnych modeli
     keyboard = []
     for model_id, model_name in AVAILABLE_MODELS.items():
-        keyboard.append([InlineKeyboardButton(text=model_name, callback_data=f"model_{model_id}")])
+        # Dodaj informację o koszcie kredytów
+        credit_cost = CREDIT_COSTS["message"].get(model_id, CREDIT_COSTS["message"]["default"])
+        keyboard.append([
+            InlineKeyboardButton(
+                text=f"{model_name} ({credit_cost} kredyt(ów))", 
+                callback_data=f"model_{model_id}"
+            )
+        ])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -175,40 +235,55 @@ async def show_models(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-async def show_templates(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Pokazuje dostępne szablony promptów"""
-    templates = get_prompt_templates()
+async def show_modes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Pokazuje dostępne tryby czatu"""
+    user_id = update.effective_user.id
     
-    if not templates:
-        await update.message.reply_text("Brak dostępnych szablonów promptów.")
+    # Sprawdź, czy użytkownik ma kredyty
+    credits = get_user_credits(user_id)
+    if credits <= 0:
+        await update.message.reply_text(SUBSCRIPTION_EXPIRED_MESSAGE)
         return
     
-    # Utwórz przyciski dla dostępnych szablonów
+    # Utwórz przyciski dla dostępnych trybów
     keyboard = []
-    for template in templates:
+    for mode_id, mode_info in CHAT_MODES.items():
         keyboard.append([
             InlineKeyboardButton(
-                text=template["name"], 
-                callback_data=f"template_{template['id']}"
+                text=f"{mode_info['name']} ({mode_info['credit_cost']} kredyt(ów))", 
+                callback_data=f"mode_{mode_id}"
             )
         ])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await update.message.reply_text(
-        "Wybierz szablon prompta, którego chcesz używać:",
+        "Wybierz tryb czatu, którego chcesz używać:",
         reply_markup=reply_markup
     )
 
-# Handlers dla obsługi wiadomości
-
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Obsługa wiadomości tekstowych od użytkownika"""
+    """Obsługa wiadomości tekstowych od użytkownika ze strumieniowaniem odpowiedzi"""
     user_id = update.effective_user.id
     user_message = update.message.text
     
-    # Sprawdź, czy użytkownik ma dostępne wiadomości
-    if not check_message_limit(user_id):
+    # Sprawdź, czy to nie jest komenda z menu
+    is_menu_command = await handle_menu_selection(update, context)
+    if is_menu_command:
+        return
+    
+    # Określ tryb i koszt kredytów
+    current_mode = "no_mode"
+    credit_cost = 1
+    
+    if 'user_data' in context.chat_data and user_id in context.chat_data['user_data']:
+        user_data = context.chat_data['user_data'][user_id]
+        if 'current_mode' in user_data and user_data['current_mode'] in CHAT_MODES:
+            current_mode = user_data['current_mode']
+            credit_cost = CHAT_MODES[current_mode]["credit_cost"]
+    
+    # Sprawdź, czy użytkownik ma wystarczającą liczbę kredytów
+    if not check_user_credits(user_id, credit_cost):
         await update.message.reply_text(SUBSCRIPTION_EXPIRED_MESSAGE)
         return
     
@@ -225,41 +300,67 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Pobierz historię konwersacji
     history = get_conversation_history(conversation_id, limit=MAX_CONTEXT_MESSAGES)
     
-    # Określ model do użycia - domyślny lub wybrany przez użytkownika
-    model_to_use = DEFAULT_MODEL
+    # Określ model do użycia - domyślny lub z trybu czatu
+    model_to_use = CHAT_MODES[current_mode].get("model", DEFAULT_MODEL)
+    
+    # Jeśli użytkownik wybrał konkretny model, użyj go
     if 'user_data' in context.chat_data and user_id in context.chat_data['user_data']:
         user_data = context.chat_data['user_data'][user_id]
         if 'current_model' in user_data:
             model_to_use = user_data['current_model']
+            # Aktualizuj koszt kredytów na podstawie modelu
+            credit_cost = CREDIT_COSTS["message"].get(model_to_use, CREDIT_COSTS["message"]["default"])
     
-    # Przygotuj system prompt - domyślny lub z szablonu
-    system_prompt = None
-    if 'user_data' in context.chat_data and user_id in context.chat_data['user_data']:
-        user_data = context.chat_data['user_data'][user_id]
-        if 'current_template' in user_data:
-            system_prompt = user_data['current_template']
+    # Przygotuj system prompt z wybranego trybu
+    system_prompt = CHAT_MODES[current_mode]["prompt"]
     
     # Przygotuj wiadomości dla API OpenAI
     messages = prepare_messages_from_history(history, user_message, system_prompt)
     
-    # Wygeneruj odpowiedź
-    response = chat_completion(messages, model=model_to_use)
+    # Wyślij początkową pustą wiadomość, którą będziemy aktualizować
+    response_message = await update.message.reply_text("⏳ Generowanie odpowiedzi...")
+    
+    # Zainicjuj pełną odpowiedź
+    full_response = ""
+    buffer = ""
+    last_update = datetime.datetime.now().timestamp()
+    
+    # Generuj odpowiedź strumieniowo
+    async for chunk in chat_completion_stream(messages, model=model_to_use):
+        full_response += chunk
+        buffer += chunk
+        
+        # Aktualizuj wiadomość co 1 sekundę lub gdy bufor jest wystarczająco duży
+        current_time = datetime.datetime.now().timestamp()
+        if current_time - last_update >= 1.0 or len(buffer) > 100:
+            try:
+                # Dodaj migający kursor na końcu wiadomości
+                await response_message.edit_text(full_response + "▌", parse_mode=ParseMode.MARKDOWN)
+                buffer = ""
+                last_update = current_time
+            except Exception as e:
+                # Jeśli wystąpi błąd (np. wiadomość nie została zmieniona), kontynuuj
+                pass
+                
+    # Aktualizuj wiadomość z pełną odpowiedzią bez kursora
+    try:
+        await response_message.edit_text(full_response, parse_mode=ParseMode.MARKDOWN)
+    except Exception as e:
+        # Jeśli wystąpi błąd formatowania Markdown, wyślij bez formatowania
+        await response_message.edit_text(full_response)
     
     # Zapisz odpowiedź do bazy danych
-    save_message(conversation_id, user_id, response, is_from_user=False, model_used=model_to_use)
+    save_message(conversation_id, user_id, full_response, is_from_user=False, model_used=model_to_use)
     
-    # Zwiększ licznik wykorzystanych wiadomości
-    increment_messages_used(user_id)
+    # Odejmij kredyty
+    deduct_user_credits(user_id, credit_cost, f"Wiadomość ({model_to_use})")
     
-    # Wyślij odpowiedź do użytkownika
-    await update.message.reply_text(response, parse_mode=ParseMode.MARKDOWN)
-    
-    # Sprawdź, ile pozostało wiadomości
-    message_status = get_message_status(user_id)
-    if message_status["messages_left"] <= 5 and message_status["messages_left"] > 0:
+    # Sprawdź aktualny stan kredytów
+    credits = get_user_credits(user_id)
+    if credits < 5:
         await update.message.reply_text(
-            f"*Uwaga:* Pozostało Ci tylko *{message_status['messages_left']}* wiadomości. "
-            f"Aktywuj nowy pakiet, aby kontynuować korzystanie z bota.",
+            f"*Uwaga:* Pozostało Ci tylko *{credits}* kredytów. "
+            f"Kup więcej za pomocą komendy /buy.",
             parse_mode=ParseMode.MARKDOWN
         )
 
@@ -267,8 +368,9 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Obsługa przesłanych dokumentów"""
     user_id = update.effective_user.id
     
-    # Sprawdź, czy użytkownik ma dostępne wiadomości
-    if not check_message_limit(user_id):
+    # Sprawdź, czy użytkownik ma wystarczającą liczbę kredytów
+    credit_cost = CREDIT_COSTS["document"]
+    if not check_user_credits(user_id, credit_cost):
         await update.message.reply_text(SUBSCRIPTION_EXPIRED_MESSAGE)
         return
     
@@ -290,10 +392,10 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     file_bytes = await file.download_as_bytearray()
     
     # Analizuj plik
-    analysis = analyze_document(file_bytes, file_name)
+    analysis = await analyze_document(file_bytes, file_name)
     
-    # Zwiększ licznik wykorzystanych wiadomości
-    increment_messages_used(user_id)
+    # Odejmij kredyty
+    deduct_user_credits(user_id, credit_cost, f"Analiza dokumentu: {file_name}")
     
     # Wyślij analizę do użytkownika
     await message.edit_text(
@@ -301,12 +403,12 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.MARKDOWN
     )
     
-    # Sprawdź, ile pozostało wiadomości
-    message_status = get_message_status(user_id)
-    if message_status["messages_left"] <= 5 and message_status["messages_left"] > 0:
+    # Sprawdź aktualny stan kredytów
+    credits = get_user_credits(user_id)
+    if credits < 5:
         await update.message.reply_text(
-            f"*Uwaga:* Pozostało Ci tylko *{message_status['messages_left']}* wiadomości. "
-            f"Aktywuj nowy pakiet, aby kontynuować korzystanie z bota.",
+            f"*Uwaga:* Pozostało Ci tylko *{credits}* kredytów. "
+            f"Kup więcej za pomocą komendy /buy.",
             parse_mode=ParseMode.MARKDOWN
         )
 
@@ -314,8 +416,9 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Obsługa przesłanych zdjęć"""
     user_id = update.effective_user.id
     
-    # Sprawdź, czy użytkownik ma dostępne wiadomości
-    if not check_message_limit(user_id):
+    # Sprawdź, czy użytkownik ma wystarczającą liczbę kredytów
+    credit_cost = CREDIT_COSTS["photo"]
+    if not check_user_credits(user_id, credit_cost):
         await update.message.reply_text(SUBSCRIPTION_EXPIRED_MESSAGE)
         return
     
@@ -332,10 +435,10 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     file_bytes = await file.download_as_bytearray()
     
     # Analizuj zdjęcie
-    analysis = analyze_image(file_bytes, f"photo_{photo.file_unique_id}.jpg")
+    analysis = await analyze_image(file_bytes, f"photo_{photo.file_unique_id}.jpg")
     
-    # Zwiększ licznik wykorzystanych wiadomości
-    increment_messages_used(user_id)
+    # Odejmij kredyty
+    deduct_user_credits(user_id, credit_cost, "Analiza zdjęcia")
     
     # Wyślij analizę do użytkownika
     await message.edit_text(
@@ -343,12 +446,12 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.MARKDOWN
     )
     
-    # Sprawdź, ile pozostało wiadomości
-    message_status = get_message_status(user_id)
-    if message_status["messages_left"] <= 5 and message_status["messages_left"] > 0:
+    # Sprawdź aktualny stan kredytów
+    credits = get_user_credits(user_id)
+    if credits < 5:
         await update.message.reply_text(
-            f"*Uwaga:* Pozostało Ci tylko *{message_status['messages_left']}* wiadomości. "
-            f"Aktywuj nowy pakiet, aby kontynuować korzystanie z bota.",
+            f"*Uwaga:* Pozostało Ci tylko *{credits}* kredytów. "
+            f"Kup więcej za pomocą komendy /buy.",
             parse_mode=ParseMode.MARKDOWN
         )
 
@@ -359,8 +462,11 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     user_id = update.effective_user.id
     
-    # Sprawdź, czy użytkownik ma dostępne wiadomości
-    if not check_message_limit(user_id):
+    # Sprawdź, czy użytkownik ma wystarczającą liczbę kredytów
+    quality = "standard"  # domyślna jakość
+    credit_cost = CREDIT_COSTS["image"][quality]
+    
+    if not check_user_credits(user_id, credit_cost):
         await update.message.reply_text(SUBSCRIPTION_EXPIRED_MESSAGE)
         return
     
@@ -378,10 +484,10 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.chat.send_action(action=ChatAction.UPLOAD_PHOTO)
     
     # Generuj obraz
-    image_url = generate_image_dall_e(prompt)
+    image_url = await generate_image_dall_e(prompt)
     
-    # Zwiększ licznik wykorzystanych wiadomości (generowanie obrazu również liczy się jako wiadomość)
-    increment_messages_used(user_id)
+    # Odejmij kredyty
+    deduct_user_credits(user_id, credit_cost, "Generowanie obrazu")
     
     if image_url:
         # Usuń wiadomość o ładowaniu
@@ -390,19 +496,19 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Wyślij obraz
         await update.message.reply_photo(
             photo=image_url,
-            caption=f"*Wygenerowany obraz:*\n{prompt}",
+            caption=f"*Wygenerowany obraz:*\n{prompt}\nKoszt: {credit_cost} kredytów",
             parse_mode=ParseMode.MARKDOWN
         )
     else:
         # Aktualizuj wiadomość o błędzie
         await message.edit_text("Przepraszam, wystąpił błąd podczas generowania obrazu. Spróbuj ponownie z innym opisem.")
     
-    # Sprawdź, ile pozostało wiadomości
-    message_status = get_message_status(user_id)
-    if message_status["messages_left"] <= 5 and message_status["messages_left"] > 0:
+    # Sprawdź aktualny stan kredytów
+    credits = get_user_credits(user_id)
+    if credits < 5:
         await update.message.reply_text(
-            f"*Uwaga:* Pozostało Ci tylko *{message_status['messages_left']}* wiadomości. "
-            f"Aktywuj nowy pakiet, aby kontynuować korzystanie z bota.",
+            f"*Uwaga:* Pozostało Ci tylko *{credits}* kredytów. "
+            f"Kup więcej za pomocą komendy /buy.",
             parse_mode=ParseMode.MARKDOWN
         )
 
@@ -418,10 +524,18 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         model_id = query.data[6:]  # Pobierz ID modelu (usuń prefix "model_")
         await handle_model_selection(update, context, model_id)
     
-    # Obsługa wybrania szablonu prompta
-    elif query.data.startswith("template_"):
-        template_id = int(query.data[9:])  # Pobierz ID szablonu (usuń prefix "template_")
-        await handle_template_selection(update, context, template_id)
+    # Obsługa wybrania trybu czatu
+    elif query.data.startswith("mode_"):
+        mode_id = query.data[5:]  # Pobierz ID trybu (usuń prefix "mode_")
+        await handle_mode_selection(update, context, mode_id)
+    
+    # Obsługa przycisków kredytów
+    elif query.data.startswith("buy_") or query.data == "buy_credits":
+        await handle_credit_callback(update, context)
+    
+    # Obsługa innych callbacków (ustawienia, historia itp.)
+    elif query.data.startswith("settings_") or query.data.startswith("lang_") or query.data.startswith("history_"):
+        await handle_settings_callback(update, context)
 
 async def handle_model_selection(update: Update, context: ContextTypes.DEFAULT_TYPE, model_id):
     """Obsługa wyboru modelu AI"""
@@ -442,42 +556,62 @@ async def handle_model_selection(update: Update, context: ContextTypes.DEFAULT_T
     
     context.chat_data['user_data'][user_id]['current_model'] = model_id
     
+    # Pobierz koszt kredytów dla wybranego modelu
+    credit_cost = CREDIT_COSTS["message"].get(model_id, CREDIT_COSTS["message"]["default"])
+    
     model_name = AVAILABLE_MODELS[model_id]
-    await query.edit_message_text(f"Wybrany model: *{model_name}*\n\nMożesz teraz zadać pytanie.", parse_mode=ParseMode.MARKDOWN)
+    await query.edit_message_text(
+        f"Wybrany model: *{model_name}*\nKoszt: *{credit_cost}* kredyt(ów) za wiadomość\n\nMożesz teraz zadać pytanie.", 
+        parse_mode=ParseMode.MARKDOWN
+    )
 
-async def handle_template_selection(update: Update, context: ContextTypes.DEFAULT_TYPE, template_id):
-    """Obsługa wyboru szablonu prompta"""
+async def handle_mode_selection(update: Update, context: ContextTypes.DEFAULT_TYPE, mode_id):
+    """Obsługa wyboru trybu czatu"""
     query = update.callback_query
     user_id = query.from_user.id
     
-    # Pobierz szablon prompta
-    template = get_prompt_template_by_id(template_id)
-    
-    if not template:
-        await query.edit_message_text("Wybrany szablon nie jest dostępny.")
+    # Sprawdź, czy tryb istnieje
+    if mode_id not in CHAT_MODES:
+        await query.edit_message_text("Wybrany tryb nie jest dostępny.")
         return
     
-    # Zapisz wybrany szablon w kontekście użytkownika
+    # Zapisz wybrany tryb w kontekście użytkownika
     if 'user_data' not in context.chat_data:
         context.chat_data['user_data'] = {}
     
     if user_id not in context.chat_data['user_data']:
         context.chat_data['user_data'][user_id] = {}
     
-    context.chat_data['user_data'][user_id]['current_template'] = template["prompt_text"]
+    context.chat_data['user_data'][user_id]['current_mode'] = mode_id
+    
+    # Jeśli tryb ma określony model, ustaw go również
+    if "model" in CHAT_MODES[mode_id]:
+        context.chat_data['user_data'][user_id]['current_model'] = CHAT_MODES[mode_id]["model"]
+    
+    mode_name = CHAT_MODES[mode_id]["name"]
+    mode_description = CHAT_MODES[mode_id]["prompt"]
+    credit_cost = CHAT_MODES[mode_id]["credit_cost"]
+    
+    # Skróć opis, jeśli jest zbyt długi
+    if len(mode_description) > 100:
+        short_description = mode_description[:97] + "..."
+    else:
+        short_description = mode_description
     
     await query.edit_message_text(
-        f"Wybrany szablon prompta: *{template['name']}*\n\n{template['description']}\n\nMożesz teraz zadać pytanie.", 
+        f"Wybrany tryb: *{mode_name}*\n"
+        f"Koszt: *{credit_cost}* kredyt(ów) za wiadomość\n\n"
+        f"Opis: _{short_description}_\n\n"
+        f"Możesz teraz zadać pytanie w wybranym trybie.",
         parse_mode=ParseMode.MARKDOWN
     )
 
 # Handlers dla komend administracyjnych
 
-async def add_license(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def add_credits_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Dodaje nową licencję do bazy danych
-    Tylko dla administratorów
-    Użycie: /addlicense [liczba_wiadomości] [ilość]
+    Dodaje kredyty użytkownikowi (tylko dla administratorów)
+    Użycie: /addcredits [user_id] [ilość]
     """
     user_id = update.effective_user.id
     
@@ -488,50 +622,38 @@ async def add_license(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Sprawdź, czy podano argumenty
     if not context.args or len(context.args) < 2:
-        await update.message.reply_text("Użycie: /addlicense [liczba_wiadomości] [ilość]")
+        await update.message.reply_text("Użycie: /addcredits [user_id] [ilość]")
         return
     
     try:
-        message_limit = int(context.args[0])
+        target_user_id = int(context.args[0])
         amount = int(context.args[1])
     except ValueError:
-        await update.message.reply_text("Błędne argumenty. Użycie: /addlicense [liczba_wiadomości] [ilość]")
-        return
-    
-    # Sprawdź, czy liczba wiadomości jest poprawna
-    if message_limit not in MESSAGE_PLANS:
-        valid_limits = ", ".join(str(d) for d in MESSAGE_PLANS.keys())
-        await update.message.reply_text(f"Nieprawidłowa liczba wiadomości. Dostępne opcje: {valid_limits}")
+        await update.message.reply_text("Błędne argumenty. Użycie: /addcredits [user_id] [ilość]")
         return
     
     # Sprawdź, czy ilość jest poprawna
-    if amount <= 0 or amount > 100:
-        await update.message.reply_text("Ilość musi być liczbą dodatnią, nie większą niż 100.")
+    if amount <= 0 or amount > 10000:
+        await update.message.reply_text("Ilość musi być liczbą dodatnią, nie większą niż 10000.")
         return
     
-    # Generuj licencje
-    price = MESSAGE_PLANS[message_limit]["price"]
-    licenses = []
+    # Dodaj kredyty
+    success = add_user_credits(target_user_id, amount, "Dodano przez administratora")
     
-    for _ in range(amount):
-        license = create_license(message_limit, price)
-        if license:
-            licenses.append(license["license_key"])
-    
-    # Wyślij wygenerowane licencje
-    if licenses:
-        licenses_str = "\n".join(licenses)
+    if success:
+        # Pobierz aktualny stan kredytów
+        credits = get_user_credits(target_user_id)
         await update.message.reply_text(
-            f"Wygenerowano {len(licenses)} licencji na {message_limit} wiadomości:\n\n{licenses_str}",
+            f"Dodano *{amount}* kredytów użytkownikowi ID: *{target_user_id}*\n"
+            f"Aktualny stan kredytów: *{credits}*",
             parse_mode=ParseMode.MARKDOWN
         )
     else:
-        await update.message.reply_text("Wystąpił błąd podczas generowania licencji.")
+        await update.message.reply_text("Wystąpił błąd podczas dodawania kredytów.")
 
 async def get_user_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Pobiera informacje o użytkowniku
-    Tylko dla administratorów
+    Pobiera informacje o użytkowniku (tylko dla administratorów)
     Użycie: /userinfo [user_id]
     """
     user_id = update.effective_user.id
@@ -552,15 +674,13 @@ async def get_user_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("ID użytkownika musi być liczbą.")
         return
     
-    # Pobierz informacje o użytkowniku z SQLite
+    # Pobierz informacje o użytkowniku
     user = get_or_create_user(target_user_id)
+    credits = get_user_credits(target_user_id)
     
     if not user:
         await update.message.reply_text("Użytkownik nie istnieje w bazie danych.")
         return
-    
-    # Pobierz status wiadomości
-    message_status = get_message_status(target_user_id)
     
     # Formatuj dane
     subscription_end = user.get('subscription_end_date', 'Brak subskrypcji')
@@ -579,99 +699,37 @@ Subskrypcja do: {subscription_end}
 Aktywny: {'Tak' if user.get('is_active', False) else 'Nie'}
 Data rejestracji: {user.get('created_at', 'Brak')}
 
-*Status wiadomości:*
-Limit wiadomości: {message_status['messages_limit']}
-Wykorzystane wiadomości: {message_status['messages_used']}
-Pozostałe wiadomości: {message_status['messages_left']}
+*Status kredytów:*
+Dostępne kredyty: *{credits}*
     """
     
     await update.message.reply_text(info, parse_mode=ParseMode.MARKDOWN)
-
-async def add_prompt_template(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Dodaje nowy szablon prompta do bazy danych
-    Tylko dla administratorów
-    Użycie: /addtemplate [nazwa] [opis] [tekst prompta]
-    """
-    user_id = update.effective_user.id
-    
-    # Sprawdź, czy użytkownik jest administratorem
-    if user_id not in ADMIN_USER_IDS:
-        await update.message.reply_text("Nie masz uprawnień do tej komendy.")
-        return
-    
-    # Sprawdź, czy wiadomość jest odpowiedzią na inną wiadomość
-    if not update.message.reply_to_message:
-        await update.message.reply_text(
-            "Ta komenda musi być odpowiedzią na wiadomość zawierającą prompt.\n"
-            "Format: /addtemplate [nazwa] [opis]\n"
-            "Przykład: /addtemplate \"Asystent kreatywny\" \"Pomaga w kreatywnym myśleniu\""
-        )
-        return
-    
-    # Sprawdź, czy podano argumenty
-    if not context.args or len(context.args) < 2:
-        await update.message.reply_text(
-            "Użycie: /addtemplate [nazwa] [opis]\n"
-            "Przykład: /addtemplate \"Asystent kreatywny\" \"Pomaga w kreatywnym myśleniu\""
-        )
-        return
-    
-    # Pobierz tekst prompta z odpowiedzi
-    prompt_text = update.message.reply_to_message.text
-    
-    # Pobierz nazwę i opis
-    # Obsługa nazwy i opisu w cudzysłowach
-    text = update.message.text[len('/addtemplate '):]
-    matches = re.findall(r'"([^"]*)"', text)
-    
-    if len(matches) < 2:
-        await update.message.reply_text(
-            "Nieprawidłowy format. Nazwa i opis muszą być w cudzysłowach.\n"
-            "Przykład: /addtemplate \"Asystent kreatywny\" \"Pomaga w kreatywnym myśleniu\""
-        )
-        return
-    
-    name = matches[0]
-    description = matches[1]
-    
-    # Dodaj szablon do bazy danych
-    template = save_prompt_template(name, description, prompt_text)
-    
-    if template:
-        await update.message.reply_text(
-            f"Dodano nowy szablon prompta:\n"
-            f"*Nazwa:* {name}\n"
-            f"*Opis:* {description}",
-            parse_mode=ParseMode.MARKDOWN
-        )
-    else:
-        await update.message.reply_text("Wystąpił błąd podczas dodawania szablonu prompta.")
 
 # Główna funkcja uruchamiająca bota
 
 def main():
     """Funkcja uruchamiająca bota"""
-    # Inicjalizacja szablonów promptów
-    templates_added = initialize_templates_in_database()
-    logger.info(f"Dodano {templates_added} nowych szablonów promptów")
-    
     # Inicjalizacja aplikacji
     application = Application.builder().token(TELEGRAM_TOKEN).build()
     
     # Dodanie handlerów komend
     application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(CommandHandler("activate", activate_license))
-    application.add_handler(CommandHandler("status", check_subscription))
+    application.add_handler(CommandHandler("status", check_status))
     application.add_handler(CommandHandler("newchat", new_chat))
     application.add_handler(CommandHandler("models", show_models))
-    application.add_handler(CommandHandler("templates", show_templates))
+    application.add_handler(CommandHandler("mode", show_modes))
     application.add_handler(CommandHandler("image", generate_image))
+    application.add_handler(CommandHandler("restart", restart_command))
+    application.add_handler(CommandHandler("menu", menu_command))
+    
+    # Dodanie handlerów kredytów
+    application.add_handler(CommandHandler("credits", credits_command))
+    application.add_handler(CommandHandler("buy", buy_command))
+    application.add_handler(CommandHandler("creditstats", credit_stats_command))
     
     # Dodanie handlerów komend administracyjnych
-    application.add_handler(CommandHandler("addlicense", add_license))
+    application.add_handler(CommandHandler("addcredits", add_credits_admin))
     application.add_handler(CommandHandler("userinfo", get_user_info))
-    application.add_handler(CommandHandler("addtemplate", add_prompt_template))
     
     # Dodanie handlerów dokumentów i zdjęć
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))

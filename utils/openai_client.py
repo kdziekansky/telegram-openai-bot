@@ -1,15 +1,41 @@
 import openai
-from openai import OpenAI
+from openai import AsyncOpenAI
 import base64
 import os
+import asyncio
 from config import OPENAI_API_KEY, DEFAULT_MODEL, DEFAULT_SYSTEM_PROMPT, DALL_E_MODEL
 
 # Inicjalizacja klienta OpenAI
-client = OpenAI(api_key=OPENAI_API_KEY)
+client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
-def chat_completion(messages, model=DEFAULT_MODEL):
+async def chat_completion_stream(messages, model=DEFAULT_MODEL):
     """
-    Wygeneruj odpowiedź z OpenAI API
+    Wygeneruj odpowiedź strumieniową z OpenAI API
+    
+    Args:
+        messages (list): Lista wiadomości w formacie OpenAI
+        model (str, optional): Model do użycia. Domyślnie DEFAULT_MODEL.
+    
+    Returns:
+        async generator: Generator zwracający fragmenty odpowiedzi
+    """
+    try:
+        stream = await client.chat.completions.create(
+            model=model,
+            messages=messages,
+            stream=True
+        )
+        
+        async for chunk in stream:
+            if chunk.choices and chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
+    except Exception as e:
+        print(f"Błąd API OpenAI (stream): {e}")
+        yield f"Przepraszam, wystąpił błąd podczas generowania odpowiedzi: {str(e)}"
+
+async def chat_completion(messages, model=DEFAULT_MODEL):
+    """
+    Wygeneruj całą odpowiedź z OpenAI API (niestrumieniowa)
     
     Args:
         messages (list): Lista wiadomości w formacie OpenAI
@@ -19,7 +45,7 @@ def chat_completion(messages, model=DEFAULT_MODEL):
         str: Wygenerowana odpowiedź
     """
     try:
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model=model,
             messages=messages
         )
@@ -63,7 +89,7 @@ def prepare_messages_from_history(history, user_message, system_prompt=None):
     
     return messages
 
-def generate_image_dall_e(prompt):
+async def generate_image_dall_e(prompt):
     """
     Wygeneruj obraz za pomocą DALL-E 3
     
@@ -74,7 +100,7 @@ def generate_image_dall_e(prompt):
         str: URL wygenerowanego obrazu lub błąd
     """
     try:
-        response = client.images.generate(
+        response = await client.images.generate(
             model=DALL_E_MODEL,
             prompt=prompt,
             n=1,
@@ -86,7 +112,7 @@ def generate_image_dall_e(prompt):
         print(f"Błąd generowania obrazu: {e}")
         return None
 
-def analyze_document(file_content, file_name):
+async def analyze_document(file_content, file_name):
     """
     Analizuj dokument za pomocą OpenAI API
     
@@ -122,7 +148,7 @@ def analyze_document(file_content, file_name):
                 # Jeśli nie możemy odkodować, traktuj jako plik binarny
                 messages[1]["content"] += "\n\nPlik zawiera dane binarne, które nie mogą być wyświetlone jako tekst."
         
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model=DEFAULT_MODEL,
             messages=messages
         )
@@ -132,7 +158,7 @@ def analyze_document(file_content, file_name):
         print(f"Błąd analizy dokumentu: {e}")
         return f"Przepraszam, wystąpił błąd podczas analizy dokumentu: {str(e)}"
 
-def analyze_image(image_content, image_name):
+async def analyze_image(image_content, image_name):
     """
     Analizuj obraz za pomocą OpenAI API
     
@@ -169,7 +195,7 @@ def analyze_image(image_content, image_name):
             }
         ]
         
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model="gpt-4-vision-preview",
             messages=messages,
             max_tokens=500
