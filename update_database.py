@@ -107,6 +107,21 @@ def update_database_credits():
             conn.close()
         return False
 
+def run_all_updates():
+    """
+    Uruchamia wszystkie funkcje aktualizujące bazę danych
+    """
+    logger.info("Rozpoczynam pełną aktualizację bazy danych")
+    
+    # Aktualizacja tabel kredytów
+    update_result = update_database_credits()
+    
+    # Tutaj można dodać wywołania innych funkcji aktualizujących bazę danych
+    # np. update_database_users(), update_database_conversations() itp.
+    
+    logger.info("Zakończono pełną aktualizację bazy danych")
+    return update_result
+
 if __name__ == "__main__":
     print("Rozpoczynam aktualizację schematu bazy danych kredytów...")
     result = update_database_credits()

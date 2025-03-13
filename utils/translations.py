@@ -58,7 +58,21 @@ translations = {
         "generating_response": "⏳ Generowanie odpowiedzi...",
         "analyzing_document": "Analizuję plik, proszę czekać...",
         "analyzing_photo": "Analizuję zdjęcie, proszę czekać...",
-        "generating_image": "Generuję obraz, proszę czekać..."
+        "generating_image": "Generuję obraz, proszę czekać...",
+        
+        # Nowe klucze dla obsługi języka i restartu
+        "restart_suggestion": "Aby zastosować nowy język do wszystkich elementów bota, użyj komendy /restart.",
+        "restart_button": "🔄 Zrestartuj bota",
+        "restarting_bot": "Restartuję bota z nowym językiem...",
+        "language_restart_complete": "✅ Bot został zrestartowany! Wszystkie elementy interfejsu są teraz w języku: *{language}*",
+        
+        # Nowe klucze dla obrazów
+        "image_usage": "Użycie: /image [opis obrazu]",
+        "generated_image": "Wygenerowany obraz:",
+        "cost": "Koszt",
+        "image_generation_error": "Przepraszam, wystąpił błąd podczas generowania obrazu. Spróbuj ponownie z innym opisem.",
+        "low_credits_warning": "Uwaga:",
+        "low_credits_message": "Pozostało Ci tylko *{credits}* kredytów. Kup więcej za pomocą komendy /buy."
     },
     "en": {
         "welcome_message": "Welcome to {bot_name}! 🤖✨\n\nI'm an advanced AI bot that will help you with many tasks - from answering questions to generating images.\n\nTo use my features, you need credits. Check your balance and available packages using the /credits command.\n\nAvailable commands:\n/start - Show this message\n/credits - Check credit balance and buy more\n/buy - Buy credit package\n/status - Check account status\n/newchat - Start a new conversation\n/mode - Choose chat mode\n/image [description] - Generate an image (cost: 10 credits)\n/restart - Refresh bot information\n/menu - Show main menu\n/code [code] - Activate promotional code",
@@ -115,7 +129,21 @@ translations = {
         "generating_response": "⏳ Generating response...",
         "analyzing_document": "Analyzing file, please wait...",
         "analyzing_photo": "Analyzing photo, please wait...",
-        "generating_image": "Generating image, please wait..."
+        "generating_image": "Generating image, please wait...",
+        
+        # Nowe klucze dla obsługi języka i restartu
+        "restart_suggestion": "To apply the new language to all bot elements, use the /restart command.",
+        "restart_button": "🔄 Restart bot",
+        "restarting_bot": "Restarting the bot with new language...",
+        "language_restart_complete": "✅ Bot has been restarted! All interface elements are now in: *{language}*",
+        
+        # Nowe klucze dla obrazów
+        "image_usage": "Usage: /image [image description]",
+        "generated_image": "Generated image:",
+        "cost": "Cost",
+        "image_generation_error": "Sorry, there was an error generating the image. Please try again with a different description.",
+        "low_credits_warning": "Warning:",
+        "low_credits_message": "You only have *{credits}* credits left. Buy more using the /buy command."
     },
     "ru": {
         "welcome_message": "Добро пожаловать в {bot_name}! 🤖✨\n\nЯ продвинутый ИИ-бот, который поможет вам во многих задачах - от ответов на вопросы до генерации изображений.\n\nДля использования моих функций вам нужны кредиты. Проверьте свой баланс и доступные пакеты с помощью команды /credits.\n\nДоступные команды:\n/start - Показать это сообщение\n/credits - Проверить баланс кредитов и купить больше\n/buy - Купить пакет кредитов\n/status - Проверить статус аккаунта\n/newchat - Начать новый разговор\n/mode - Выбрать режим чата\n/image [описание] - Сгенерировать изображение (стоимость: 10 кредитов)\n/restart - Обновить информацию о боте\n/menu - Показать главное меню\n/code [код] - Активировать промокод",
@@ -172,7 +200,21 @@ translations = {
         "generating_response": "⏳ Генерация ответа...",
         "analyzing_document": "Анализирую файл, пожалуйста, подождите...",
         "analyzing_photo": "Анализирую фото, пожалуйста, подождите...",
-        "generating_image": "Генерирую изображение, пожалуйста, подождите..."
+        "generating_image": "Генерирую изображение, пожалуйста, подождите...",
+        
+        # Nowe klucze dla obsługi języka i restartu
+        "restart_suggestion": "Чтобы применить новый язык ко всем элементам бота, используйте команду /restart.",
+        "restart_button": "🔄 Перезапустить бота",
+        "restarting_bot": "Перезапуск бота с новым языком...",
+        "language_restart_complete": "✅ Бот был перезапущен! Все элементы интерфейса теперь на языке: *{language}*",
+        
+        # Nowe klucze dla obrazów
+        "image_usage": "Использование: /image [описание изображения]",
+        "generated_image": "Сгенерированное изображение:",
+        "cost": "Стоимость",
+        "image_generation_error": "Извините, произошла ошибка при генерации изображения. Пожалуйста, попробуйте снова с другим описанием.",
+        "low_credits_warning": "Внимание:",
+        "low_credits_message": "У вас осталось только *{credits}* кредитов. Купите больше с помощью команды /buy."
     }
 }
 
@@ -193,10 +235,14 @@ def get_text(key, language="pl", **kwargs):
         language = "pl"
     
     # Pobierz tekst lub zwróć klucz jako fallback
-    text = translations[language].get(key, key)
+    text = translations[language].get(key, kwargs.get('default', key))
     
     # Formatuj tekst z podanymi argumentami
     if kwargs:
-        return text.format(**kwargs)
+        try:
+            return text.format(**kwargs)
+        except KeyError:
+            # Jeśli formatowanie nie powiedzie się, zwróć nieformatowany tekst
+            return text
     
     return text
