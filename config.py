@@ -23,7 +23,15 @@ AVAILABLE_MODELS = {
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 
-# Konfiguracja subskrypcji
+# Konfiguracja subskrypcji - zmiana na model ilości wiadomości
+MESSAGE_PLANS = {
+    100: {"name": "Pakiet Podstawowy", "price": 25.00},
+    250: {"name": "Pakiet Standard", "price": 50.00},
+    500: {"name": "Pakiet Premium", "price": 80.00},
+    1000: {"name": "Pakiet Biznes", "price": 130.00}
+}
+
+# Stara konfiguracja subskrypcji czasowej (zachowana dla kompatybilności)
 SUBSCRIPTION_PLANS = {
     30: {"name": "Plan miesięczny", "price": 30.00},
     60: {"name": "Plan dwumiesięczny", "price": 50.00},
@@ -42,19 +50,19 @@ Aby rozpocząć korzystanie, aktywuj swoją licencję za pomocą komendy /activa
 
 Dostępne komendy:
 /start - Pokaż tę wiadomość
-/activate [klucz] - Aktywuj subskrypcję
-/status - Sprawdź status subskrypcji
+/activate [klucz] - Aktywuj pakiet wiadomości
+/status - Sprawdź stan konta
 /newchat - Rozpocznij nową konwersację
 /models - Pokaż dostępne modele AI
 /templates - Pokaż dostępne szablony promptów
 """
 
-SUBSCRIPTION_EXPIRED_MESSAGE = """Twoja subskrypcja wygasła. 
-Aby kontynuować korzystanie z bota, aktywuj nową licencję za pomocą komendy /activate [klucz licencyjny].
+SUBSCRIPTION_EXPIRED_MESSAGE = """Wykorzystałeś limit wiadomości w swoim pakiecie. 
+Aby kontynuować korzystanie z bota, aktywuj nowy pakiet wiadomości za pomocą komendy /activate [klucz licencyjny].
 """
 
 LICENSE_ACTIVATED_MESSAGE = """Licencja została pomyślnie aktywowana! 
-Twoja subskrypcja jest ważna do: {end_date}.
+Twój pakiet zawiera {message_limit} wiadomości.
 """
 
 INVALID_LICENSE_MESSAGE = "Podany klucz licencyjny jest nieprawidłowy lub został już wykorzystany."

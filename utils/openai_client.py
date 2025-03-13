@@ -28,18 +28,22 @@ def chat_completion(messages, model=DEFAULT_MODEL):
         print(f"Błąd API OpenAI: {e}")
         return f"Przepraszam, wystąpił błąd podczas generowania odpowiedzi: {str(e)}"
 
-def prepare_messages_from_history(history, user_message, system_prompt=DEFAULT_SYSTEM_PROMPT):
+def prepare_messages_from_history(history, user_message, system_prompt=None):
     """
     Przygotuj listę wiadomości dla API OpenAI na podstawie historii konwersacji
     
     Args:
         history (list): Lista wiadomości z historii konwersacji
         user_message (str): Aktualna wiadomość użytkownika
-        system_prompt (str, optional): Prompt systemowy. Domyślnie DEFAULT_SYSTEM_PROMPT.
+        system_prompt (str, optional): Prompt systemowy. Jeśli None, użyty zostanie DEFAULT_SYSTEM_PROMPT.
     
     Returns:
         list: Lista wiadomości w formacie OpenAI
     """
+    # Zabezpieczenie przed None - używamy domyślnego prompta, jeśli system_prompt jest None
+    if system_prompt is None:
+        system_prompt = DEFAULT_SYSTEM_PROMPT
+    
     messages = [
         {"role": "system", "content": system_prompt}
     ]
@@ -47,13 +51,15 @@ def prepare_messages_from_history(history, user_message, system_prompt=DEFAULT_S
     # Dodaj wiadomości z historii
     for msg in history:
         role = "user" if msg["is_from_user"] else "assistant"
+        # Upewniamy się, że content nie jest None
+        content = msg["content"] if msg["content"] is not None else ""
         messages.append({
             "role": role,
-            "content": msg["content"]
+            "content": content
         })
     
     # Dodaj aktualną wiadomość użytkownika
-    messages.append({"role": "user", "content": user_message})
+    messages.append({"role": "user", "content": user_message if user_message is not None else ""})
     
     return messages
 

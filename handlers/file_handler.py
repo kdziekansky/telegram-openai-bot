@@ -26,7 +26,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = await update.message.reply_text("Analizuję plik, proszę czekać...")
     
     # Wyślij informację o aktywności bota
-    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
+    await update.message.chat.send_action(action=ChatAction.TYPING)
     
     file = await context.bot.get_file(document.file_id)
     file_bytes = await file.download_as_bytearray()
@@ -56,7 +56,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = await update.message.reply_text("Analizuję zdjęcie, proszę czekać...")
     
     # Wyślij informację o aktywności bota
-    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
+    await update.message.chat.send_action(action=ChatAction.TYPING)
     
     file = await context.bot.get_file(photo.file_id)
     file_bytes = await file.download_as_bytearray()

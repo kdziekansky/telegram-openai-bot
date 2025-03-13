@@ -64,7 +64,8 @@ def initialize_templates_in_database():
     Inicjalizuje predefiniowane szablony w bazie danych
     """
     try:
-        from database.supabase_client import save_prompt_template, get_prompt_templates
+        # Zmiana z Supabase na SQLite
+        from database.sqlite_client import save_prompt_template, get_prompt_templates
         
         # Pobierz istniejące szablony
         existing_templates = get_prompt_templates()
@@ -130,5 +131,5 @@ def initialize_templates_in_database():
         
         return added_count
     except Exception as e:
-        logger.error(f"Błąd przy pobieraniu szablonów promptów: {e}")
+        logger.error(f"Błąd przy inicjalizacji szablonów promptów: {e}")
         return 0

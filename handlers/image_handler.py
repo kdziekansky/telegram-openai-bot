@@ -28,7 +28,7 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = await update.message.reply_text("Generuję obraz, proszę czekać...")
     
     # Wyślij informację o aktywności bota
-    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.UPLOAD_PHOTO)
+    await update.message.chat.send_action(action=ChatAction.UPLOAD_PHOTO)
     
     # Generuj obraz
     image_url = generate_image_dall_e(prompt)
@@ -38,8 +38,7 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await message.delete()
         
         # Wyślij obraz
-        await context.bot.send_photo(
-            chat_id=update.effective_chat.id,
+        await update.message.reply_photo(
             photo=image_url,
             caption=f"*Wygenerowany obraz:*\n{prompt}",
             parse_mode=ParseMode.MARKDOWN
