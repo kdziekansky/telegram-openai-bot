@@ -11,7 +11,8 @@ from telegram.ext import (
 from telegram.constants import ParseMode, ChatAction
 from config import (
     TELEGRAM_TOKEN, DEFAULT_MODEL, AVAILABLE_MODELS, 
-    MAX_CONTEXT_MESSAGES, CHAT_MODES, BOT_NAME, CREDIT_COSTS
+    MAX_CONTEXT_MESSAGES, CHAT_MODES, BOT_NAME, CREDIT_COSTS,
+    AVAILABLE_LANGUAGES
 )
 
 # Import funkcji z modułu tłumaczeń
@@ -51,6 +52,9 @@ from handlers.menu_handler import (
 from handlers.start_handler import (
     start_command, handle_language_selection
 )
+
+# Import handlera obrazów - DODANE ROZWIĄZANIE
+from handlers.image_handler import generate_image
 
 from utils.openai_client import (
     chat_completion_stream, prepare_messages_from_history,
@@ -97,6 +101,9 @@ async def restart_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if 'current_model' in user_data and user_data['current_model'] in AVAILABLE_MODELS:
             current_model = AVAILABLE_MODELS[user_data['current_model']]
     
+    # Pobierz nazwę aktualnego języka
+    language_name = AVAILABLE_LANGUAGES.get(language, language)
+    
     # Przygotowanie wiadomości
     restart_text = f"""
 🔄 *{BOT_NAME} został zrestartowany*
@@ -105,13 +112,14 @@ async def restart_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 """
     
     # Dodaj informacje o aktualnych ustawieniach
-    restart_text += f"\n*Aktualne ustawienia:*"
-    restart_text += f"\nTryb czatu: {current_mode} (koszt: {current_mode_cost} kredyt(ów) za wiadomość)"
-    restart_text += f"\nModel AI: {current_model}"
-    restart_text += f"\nAktualny stan kredytów: *{credits}* kredytów"
+    restart_text += f"\n*{get_text('settings_title', language)}*"
+    restart_text += f"\n{get_text('menu_chat_mode', language)}: {current_mode} ({get_text('credits', language)}: {current_mode_cost})"
+    restart_text += f"\n{get_text('settings_model', language)}: {current_model}"
+    restart_text += f"\n{get_text('settings_language', language)}: {language_name}"
+    restart_text += f"\n{get_text('menu_balance', language)}: *{credits}* {get_text('credits', language)}"
     
-    # Dodaj informację o rozpoczęciu nowej rozmowy
-    restart_text += "\n\nMożesz teraz zadać nowe pytanie lub użyć komendy /newchat, aby rozpocząć zupełnie nową konwersację."
+    # Dodaj informację o restarcie bota
+    restart_text += f"\n\n{get_text('language_restart_complete', language, language=language_name)}"
     
     await update.message.reply_text(restart_text, parse_mode=ParseMode.MARKDOWN)
     
@@ -438,70 +446,53 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.MARKDOWN
         )
 
-async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Generuje obraz za pomocą DALL-E na podstawie opisu
-    Użycie: /image [opis obrazu]
-    """
-    user_id = update.effective_user.id
-    language = get_user_language(context, user_id)
-    
-    # Sprawdź, czy użytkownik ma wystarczającą liczbę kredytów
-    quality = "standard"  # domyślna jakość
-    credit_cost = CREDIT_COSTS["image"][quality]
-    
-    if not check_user_credits(user_id, credit_cost):
-        await update.message.reply_text(get_text("subscription_expired", language))
-        return
-    
-    # Sprawdź, czy podano opis obrazu
-    if not context.args or len(' '.join(context.args)) < 3:
-        await update.message.reply_text("Użycie: /image [opis obrazu]\nNa przykład: /image pies na rowerze w parku")
-        return
-    
-    prompt = ' '.join(context.args)
-    
-    # Powiadom użytkownika o rozpoczęciu generowania
-    message = await update.message.reply_text(get_text("generating_image", language))
-    
-    # Wyślij informację o aktywności bota
-    await update.message.chat.send_action(action=ChatAction.UPLOAD_PHOTO)
-    
-    # Generuj obraz
-    image_url = await generate_image_dall_e(prompt)
-    
-    # Odejmij kredyty
-    deduct_user_credits(user_id, credit_cost, "Generowanie obrazu")
-    
-    if image_url:
-        # Usuń wiadomość o ładowaniu
-        await message.delete()
-        
-        # Wyślij obraz
-        await update.message.reply_photo(
-            photo=image_url,
-            caption=f"*Wygenerowany obraz:*\n{prompt}\nKoszt: {credit_cost} kredytów",
-            parse_mode=ParseMode.MARKDOWN
-        )
-    else:
-        # Aktualizuj wiadomość o błędzie
-        await message.edit_text("Przepraszam, wystąpił błąd podczas generowania obrazu. Spróbuj ponownie z innym opisem.")
-    
-    # Sprawdź aktualny stan kredytów
-    credits = get_user_credits(user_id)
-    if credits < 5:
-        await update.message.reply_text(
-            f"*Uwaga:* Pozostało Ci tylko *{credits}* kredytów. "
-            f"Kup więcej za pomocą komendy /buy.",
-            parse_mode=ParseMode.MARKDOWN
-        )
-
 # Handlers dla przycisków i callbacków
 
 async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Obsługa zapytań zwrotnych (z przycisków)"""
     query = update.callback_query
     await query.answer()  # Odpowiedz na callback_query, aby usunąć "zegar oczekiwania"
+    
+    user_id = query.from_user.id
+    language = get_user_language(context, user_id)
+    
+    # Obsługa przycisku restartu bota
+    if query.data == "restart_bot":
+        restart_message = get_text("restarting_bot", language)
+        await query.edit_message_text(restart_message)
+        
+        # Wykonaj podobne operacje jak w komendzie /restart
+        language_name = AVAILABLE_LANGUAGES.get(language, language)
+        restart_complete = get_text("language_restart_complete", language, language=language_name)
+        
+        # Wyślij nową wiadomość z potwierdzeniem restartu
+        await query.message.reply_text(restart_complete, parse_mode=ParseMode.MARKDOWN)
+        
+        # Pokaż menu główne
+        from handlers.menu_handler import show_main_menu
+        
+        # Utwórz sztuczny obiekt update do wyświetlenia menu
+        class FakeUpdate:
+            class FakeMessage:
+                def __init__(self, chat_id, message_id):
+                    self.chat_id = chat_id
+                    self.message_id = message_id
+                    
+                async def reply_text(self, text, **kwargs):
+                    return await context.bot.send_message(
+                        chat_id=chat_id,
+                        text=text,
+                        **kwargs
+                    )
+            
+            def __init__(self, message, user):
+                self.message = message
+                self.effective_user = user
+        
+        fake_message = FakeUpdate.FakeMessage(query.message.chat_id, query.message.message_id)
+        fake_update = FakeUpdate(fake_message, query.from_user)
+        await show_main_menu(fake_update, context)
+        return
     
     # Obsługa wybrania modelu
     if query.data.startswith("model_"):

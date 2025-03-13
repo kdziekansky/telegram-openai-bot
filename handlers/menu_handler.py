@@ -314,7 +314,7 @@ async def handle_settings_callback(update: Update, context: ContextTypes.DEFAULT
     Obsługuje callbacki związane z ustawieniami
     """
     query = update.callback_query
-    await query.answer()
+    await query.answer()  # Odpowiedz na callback_query, aby usunąć "zegar oczekiwania"
     
     user_id = query.from_user.id
     language = get_user_language(context, user_id)
@@ -434,6 +434,10 @@ async def change_language(update: Update, context: ContextTypes.DEFAULT_TYPE, se
     if user_id not in context.chat_data['user_data']:
         context.chat_data['user_data'][user_id] = {}
     
+    # Zapisz stary język (do porównania czy się zmienił)
+    old_language = context.chat_data['user_data'][user_id].get('language', 'pl')
+    
+    # Aktualizuj na nowy język
     context.chat_data['user_data'][user_id]['language'] = selected_lang
     
     # Zapisz język do bazy danych
@@ -451,9 +455,22 @@ async def change_language(update: Update, context: ContextTypes.DEFAULT_TYPE, se
     # Pobierz przetłumaczoną nazwę języka
     language_name = AVAILABLE_LANGUAGES.get(selected_lang, selected_lang)
     
+    # Użyj nowego języka do tłumaczenia komunikatu
+    confirmation_message = get_text("language_selected", selected_lang, language=language_name)
+    restart_suggestion = get_text("restart_suggestion", selected_lang)
+    
+    # Dodaj sugestię użycia komendy restart
+    full_message = f"{confirmation_message}\n\n{restart_suggestion}"
+    
     await query.edit_message_text(
-        get_text("language_selected", selected_lang, language=language_name),
-        parse_mode=ParseMode.MARKDOWN
+        full_message,
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton(
+                get_text("restart_button", selected_lang), 
+                callback_data="restart_bot"
+            )]
+        ])
     )
 
 async def set_user_name(update: Update, context: ContextTypes.DEFAULT_TYPE):

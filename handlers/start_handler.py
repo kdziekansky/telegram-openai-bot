@@ -215,7 +215,7 @@ async def handle_language_selection(update: Update, context: ContextTypes.DEFAUL
                 
             async def reply_text(self, text, **kwargs):
                 return await context.bot.send_message(
-                    chat_id=chat_id,
+                    chat_id=self.chat_id,  # Poprawione z chat_id na self.chat_id
                     text=text,
                     **kwargs
                 )
