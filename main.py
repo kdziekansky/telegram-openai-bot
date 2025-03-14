@@ -61,6 +61,14 @@ from utils.openai_client import (
     generate_image_dall_e, analyze_document, analyze_image
 )
 
+# Dodaj importy na górze pliku
+from handlers.export_handler import export_conversation
+from handlers.theme_handler import theme_command, notheme_command, handle_theme_callback
+from handlers.reminder_handler import remind_command, reminders_command, handle_reminder_callback, check_due_reminders
+from handlers.note_handler import note_command, notes_command, handle_note_callback
+from utils.credit_analytics import generate_credit_usage_chart, generate_usage_breakdown_chart
+
+
 # Konfiguracja loggera
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -69,18 +77,37 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Lista ID administratorów bota - tutaj należy dodać swoje ID
-ADMIN_USER_IDS = [123456789]  # Zastąp swoim ID użytkownika Telegram
+ADMIN_USER_IDS = [1743680448, 787188598]  # Zastąp swoim ID użytkownika Telegram
 
 # Handlers dla podstawowych komend
 
 async def restart_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Obsługa komendy /restart
-    Pokazuje informacje o bocie, dostępnych komendach i aktualnych ustawieniach użytkownika
-    bez ponownej rejestracji użytkownika
+    Resetuje kontekst bota, pokazuje informacje o bocie i aktualnych ustawieniach użytkownika
     """
     user_id = update.effective_user.id
     language = get_user_language(context, user_id)
+    
+    # Resetowanie konwersacji - tworzymy nową konwersację i czyścimy kontekst
+    conversation = create_new_conversation(user_id)
+    
+    # Zachowujemy wybrane ustawienia użytkownika (język, model)
+    user_data = {}
+    if 'user_data' in context.chat_data and user_id in context.chat_data['user_data']:
+        # Pobieramy tylko podstawowe ustawienia, reszta jest resetowana
+        old_user_data = context.chat_data['user_data'][user_id]
+        if 'language' in old_user_data:
+            user_data['language'] = old_user_data['language']
+        if 'current_model' in old_user_data:
+            user_data['current_model'] = old_user_data['current_model']
+        if 'current_mode' in old_user_data:
+            user_data['current_mode'] = old_user_data['current_mode']
+    
+    # Resetujemy dane użytkownika w kontekście i ustawiamy tylko zachowane ustawienia
+    if 'user_data' not in context.chat_data:
+        context.chat_data['user_data'] = {}
+    context.chat_data['user_data'][user_id] = user_data
     
     # Sprawdzanie statusu kredytów
     credits = get_user_credits(user_id)
@@ -88,18 +115,14 @@ async def restart_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Pobranie aktualnego trybu czatu
     current_mode = "brak" 
     current_mode_cost = 1
-    if 'user_data' in context.chat_data and user_id in context.chat_data['user_data']:
-        user_data = context.chat_data['user_data'][user_id]
-        if 'current_mode' in user_data and user_data['current_mode'] in CHAT_MODES:
-            current_mode = CHAT_MODES[user_data['current_mode']]["name"]
-            current_mode_cost = CHAT_MODES[user_data['current_mode']]["credit_cost"]
+    if 'current_mode' in user_data and user_data['current_mode'] in CHAT_MODES:
+        current_mode = CHAT_MODES[user_data['current_mode']]["name"]
+        current_mode_cost = CHAT_MODES[user_data['current_mode']]["credit_cost"]
     
     # Pobranie aktualnego modelu
     current_model = DEFAULT_MODEL
-    if 'user_data' in context.chat_data and user_id in context.chat_data['user_data']:
-        user_data = context.chat_data['user_data'][user_id]
-        if 'current_model' in user_data and user_data['current_model'] in AVAILABLE_MODELS:
-            current_model = AVAILABLE_MODELS[user_data['current_model']]
+    if 'current_model' in user_data and user_data['current_model'] in AVAILABLE_MODELS:
+        current_model = AVAILABLE_MODELS[user_data['current_model']]
     
     # Pobierz nazwę aktualnego języka
     language_name = AVAILABLE_LANGUAGES.get(language, language)
@@ -119,7 +142,7 @@ async def restart_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     restart_text += f"\n{get_text('menu_balance', language)}: *{credits}* {get_text('credits', language)}"
     
     # Dodaj informację o restarcie bota
-    restart_text += f"\n\n{get_text('language_restart_complete', language, language=language_name)}"
+    restart_text += f"\n\n{get_text('language_restart_complete', language, language_display=language_name)}"
     
     await update.message.reply_text(restart_text, parse_mode=ParseMode.MARKDOWN)
     
@@ -461,9 +484,29 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         restart_message = get_text("restarting_bot", language)
         await query.edit_message_text(restart_message)
         
+        # Resetowanie konwersacji - tworzymy nową konwersację i czyścimy kontekst
+        conversation = create_new_conversation(user_id)
+        
+        # Zachowujemy wybrane ustawienia użytkownika (język, model)
+        user_data = {}
+        if 'user_data' in context.chat_data and user_id in context.chat_data['user_data']:
+            # Pobieramy tylko podstawowe ustawienia, reszta jest resetowana
+            old_user_data = context.chat_data['user_data'][user_id]
+            if 'language' in old_user_data:
+                user_data['language'] = old_user_data['language']
+            if 'current_model' in old_user_data:
+                user_data['current_model'] = old_user_data['current_model']
+            if 'current_mode' in old_user_data:
+                user_data['current_mode'] = old_user_data['current_mode']
+        
+        # Resetujemy dane użytkownika w kontekście i ustawiamy tylko zachowane ustawienia
+        if 'user_data' not in context.chat_data:
+            context.chat_data['user_data'] = {}
+        context.chat_data['user_data'][user_id] = user_data
+        
         # Wykonaj podobne operacje jak w komendzie /restart
         language_name = AVAILABLE_LANGUAGES.get(language, language)
-        restart_complete = get_text("language_restart_complete", language, language=language_name)
+        restart_complete = get_text("language_restart_complete", language, language_display=language_name)
         
         # Wyślij nową wiadomość z potwierdzeniem restartu
         await query.message.reply_text(restart_complete, parse_mode=ParseMode.MARKDOWN)
@@ -480,7 +523,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     
                 async def reply_text(self, text, **kwargs):
                     return await context.bot.send_message(
-                        chat_id=chat_id,
+                        chat_id=self.chat_id,
                         text=text,
                         **kwargs
                     )
@@ -727,6 +770,26 @@ def main():
     
     # Dodanie handlera wiadomości tekstowych (musi być na końcu)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
+
+    # W funkcji main(), po istniejących handlerach dodaj:
+    application.add_handler(CommandHandler("export", export_conversation))
+
+    # Handlery tematów konwersacji
+    application.add_handler(CommandHandler("theme", theme_command))
+    application.add_handler(CommandHandler("notheme", notheme_command))
+
+    # Handlery przypomnień i notatek
+    application.add_handler(CommandHandler("remind", remind_command))
+    application.add_handler(CommandHandler("reminders", reminders_command))
+    application.add_handler(CommandHandler("note", note_command))
+    application.add_handler(CommandHandler("notes", notes_command))
+
+    # Handler rozszerzonego monitorowania kredytów
+    application.add_handler(CommandHandler("creditstats", credit_analytics_command))
+
+    # Uruchom cykliczne sprawdzanie przypomnień
+    job_queue = application.job_queue
+    job_queue.run_repeating(check_due_reminders, interval=60)  # Sprawdzaj co 60 sekund
     
     # Uruchomienie bota
     application.run_polling()

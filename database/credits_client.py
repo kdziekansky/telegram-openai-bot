@@ -357,3 +357,43 @@ def get_user_credit_stats(user_id):
             'total_spent': 0.0,
             'usage_history': []
         }
+        # Dodaj te funkcje do credits_client.py
+
+def add_stars_payment_option(user_id, stars_amount, credits_amount, description=None):
+    """
+    Dodaje kredyty do konta użytkownika za płatność gwiazdkami
+    
+    Args:
+        user_id (int): ID użytkownika
+        stars_amount (int): Liczba gwiazdek
+        credits_amount (int): Liczba kredytów do dodania
+        description (str, optional): Opis transakcji
+    
+    Returns:
+        bool: True jeśli operacja się powiodła, False w przeciwnym razie
+    """
+    try:
+        # Wykorzystamy istniejącą funkcję add_user_credits
+        if description is None:
+            description = f"Zakup za {stars_amount} gwiazdek Telegram"
+        
+        return add_user_credits(user_id, credits_amount, description)
+    except Exception as e:
+        logger.error(f"Błąd przy dodawaniu kredytów za gwiazdki: {e}")
+        return False
+
+def get_stars_conversion_rate():
+    """
+    Pobiera aktualny kurs wymiany gwiazdek na kredyty
+    
+    Returns:
+        dict: Słownik z kursami wymiany dla różnych ilości gwiazdek
+    """
+    # Przykładowy kurs: klucz to liczba gwiazdek, wartość to liczba kredytów
+    return {
+        1: 10,    # 1 gwiazdka = 10 kredytów
+        5: 55,    # 5 gwiazdek = 55 kredytów (10% bonus)
+        10: 120,  # 10 gwiazdek = 120 kredytów (20% bonus)
+        25: 325,  # 25 gwiazdek = 325 kredytów (30% bonus)
+        50: 700   # 50 gwiazdek = 700 kredytów (40% bonus)
+    }

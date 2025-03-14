@@ -456,21 +456,23 @@ async def change_language(update: Update, context: ContextTypes.DEFAULT_TYPE, se
     language_name = AVAILABLE_LANGUAGES.get(selected_lang, selected_lang)
     
     # Użyj nowego języka do tłumaczenia komunikatu
-    confirmation_message = get_text("language_selected", selected_lang, language=language_name)
+    confirmation_message = get_text("language_selected", selected_lang, language_display=language_name)
     restart_suggestion = get_text("restart_suggestion", selected_lang)
     
     # Dodaj sugestię użycia komendy restart
     full_message = f"{confirmation_message}\n\n{restart_suggestion}"
     
+    # Tworzę przyciski z prawidłowym callbackiem
+    keyboard = [[InlineKeyboardButton(
+        get_text("restart_button", selected_lang), 
+        callback_data="restart_bot"
+    )]]
+    
+    # Wyświetl komunikat z przyciskiem restartu
     await query.edit_message_text(
         full_message,
         parse_mode=ParseMode.MARKDOWN,
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton(
-                get_text("restart_button", selected_lang), 
-                callback_data="restart_bot"
-            )]
-        ])
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 async def set_user_name(update: Update, context: ContextTypes.DEFAULT_TYPE):

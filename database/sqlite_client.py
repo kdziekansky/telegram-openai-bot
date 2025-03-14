@@ -653,3 +653,611 @@ def get_prompt_template_by_id(template_id):
             conn.close()
     
     return None
+
+    # Dodaj te funkcje do sqlite_client.py
+
+def init_reminders_notes_tables():
+    """Inicjalizuje tabele przypomnień i notatek"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Tabela przypomnień
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS reminders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            content TEXT NOT NULL,
+            remind_at TEXT NOT NULL,
+            created_at TEXT,
+            is_completed INTEGER DEFAULT 0,
+            completed_at TEXT,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+        ''')
+        
+        # Tabela notatek
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            title TEXT,
+            content TEXT NOT NULL,
+            created_at TEXT,
+            updated_at TEXT,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+        ''')
+        
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        logger.error(f"Błąd inicjalizacji tabel przypomnień i notatek: {e}")
+        if 'conn' in locals():
+            conn.close()
+        return False
+
+def create_reminder(user_id, content, remind_at):
+    """
+    Tworzy nowe przypomnienie dla użytkownika
+    
+    Args:
+        user_id (int): ID użytkownika
+        content (str): Treść przypomnienia
+        remind_at (datetime): Data i czas przypomnienia
+    
+    Returns:
+        dict: Dane utworzonego przypomnienia lub None w przypadku błędu
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        now = datetime.datetime.now(pytz.UTC).isoformat()
+        remind_at_iso = remind_at.isoformat()
+        
+        cursor.execute(
+            "INSERT INTO reminders (user_id, content, remind_at, created_at) VALUES (?, ?, ?, ?)",
+            (user_id, content, remind_at_iso, now)
+        )
+        
+        reminder_id = cursor.lastrowid
+        conn.commit()
+        
+        # Pobierz utworzone przypomnienie
+        cursor.execute("SELECT * FROM reminders WHERE id = ?", (reminder_id,))
+        reminder_data = cursor.fetchone()
+        conn.close()
+        
+        if reminder_data:
+            return {
+                'id': reminder_data[0],
+                'user_id': reminder_data[1],
+                'content': reminder_data[2],
+                'remind_at': reminder_data[3],
+                'created_at': reminder_data[4],
+                'is_completed': bool(reminder_data[5]),
+                'completed_at': reminder_data[6]
+            }
+        
+        return None
+    except Exception as e:
+        logger.error(f"Błąd przy tworzeniu przypomnienia: {e}")
+        if 'conn' in locals():
+            conn.close()
+        return None
+
+def get_user_pending_reminders(user_id):
+    """
+    Pobiera listę oczekujących przypomnień użytkownika
+    
+    Args:
+        user_id (int): ID użytkownika
+    
+    Returns:
+        list: Lista przypomnień
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            "SELECT * FROM reminders WHERE user_id = ? AND is_completed = 0 ORDER BY remind_at ASC",
+            (user_id,)
+        )
+        
+        reminders = cursor.fetchall()
+        conn.close()
+        
+        result = []
+        for reminder in reminders:
+            result.append({
+                'id': reminder[0],
+                'user_id': reminder[1],
+                'content': reminder[2],
+                'remind_at': reminder[3],
+                'created_at': reminder[4],
+                'is_completed': bool(reminder[5]),
+                'completed_at': reminder[6]
+            })
+        
+        return result
+    except Exception as e:
+        logger.error(f"Błąd przy pobieraniu przypomnień: {e}")
+        if 'conn' in locals():
+            conn.close()
+        return []
+
+def get_due_reminders():
+    """
+    Pobiera listę przypomnień, dla których nadszedł czas
+    
+    Returns:
+        list: Lista przypomnień
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        now = datetime.datetime.now(pytz.UTC).isoformat()
+        
+        cursor.execute(
+            "SELECT * FROM reminders WHERE is_completed = 0 AND remind_at <= ?",
+            (now,)
+        )
+        
+        reminders = cursor.fetchall()
+        conn.close()
+        
+        result = []
+        for reminder in reminders:
+            result.append({
+                'id': reminder[0],
+                'user_id': reminder[1],
+                'content': reminder[2],
+                'remind_at': reminder[3],
+                'created_at': reminder[4],
+                'is_completed': bool(reminder[5]),
+                'completed_at': reminder[6]
+            })
+        
+        return result
+    except Exception as e:
+        logger.error(f"Błąd przy pobieraniu przypomnień: {e}")
+        if 'conn' in locals():
+            conn.close()
+        return []
+
+def complete_reminder(reminder_id):
+    """
+    Oznacza przypomnienie jako zakończone
+    
+    Args:
+        reminder_id (int): ID przypomnienia
+    
+    Returns:
+        bool: True jeśli operacja się powiodła, False w przeciwnym razie
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        now = datetime.datetime.now(pytz.UTC).isoformat()
+        
+        cursor.execute(
+            "UPDATE reminders SET is_completed = 1, completed_at = ? WHERE id = ?",
+            (now, reminder_id)
+        )
+        
+        conn.commit()
+        conn.close()
+        
+        return True
+    except Exception as e:
+        logger.error(f"Błąd przy oznaczaniu przypomnienia jako zakończone: {e}")
+        if 'conn' in locals():
+            conn.close()
+        return False
+
+def create_note(user_id, title, content):
+    """
+    Tworzy nową notatkę dla użytkownika
+    
+    Args:
+        user_id (int): ID użytkownika
+        title (str): Tytuł notatki
+        content (str): Treść notatki
+    
+    Returns:
+        dict: Dane utworzonej notatki lub None w przypadku błędu
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        now = datetime.datetime.now(pytz.UTC).isoformat()
+        
+        cursor.execute(
+            "INSERT INTO notes (user_id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+            (user_id, title, content, now, now)
+        )
+        
+        note_id = cursor.lastrowid
+        conn.commit()
+        
+        # Pobierz utworzoną notatkę
+        cursor.execute("SELECT * FROM notes WHERE id = ?", (note_id,))
+        note_data = cursor.fetchone()
+        conn.close()
+        
+        if note_data:
+            return {
+                'id': note_data[0],
+                'user_id': note_data[1],
+                'title': note_data[2],
+                'content': note_data[3],
+                'created_at': note_data[4],
+                'updated_at': note_data[5]
+            }
+        
+        return None
+    except Exception as e:
+        logger.error(f"Błąd przy tworzeniu notatki: {e}")
+        if 'conn' in locals():
+            conn.close()
+        return None
+
+def get_user_notes(user_id):
+    """
+    Pobiera listę notatek użytkownika
+    
+    Args:
+        user_id (int): ID użytkownika
+    
+    Returns:
+        list: Lista notatek
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            "SELECT * FROM notes WHERE user_id = ? ORDER BY updated_at DESC",
+            (user_id,)
+        )
+        
+        notes = cursor.fetchall()
+        conn.close()
+        
+        result = []
+        for note in notes:
+            result.append({
+                'id': note[0],
+                'user_id': note[1],
+                'title': note[2],
+                'content': note[3],
+                'created_at': note[4],
+                'updated_at': note[5]
+            })
+        
+        return result
+    except Exception as e:
+        logger.error(f"Błąd przy pobieraniu notatek: {e}")
+        if 'conn' in locals():
+            conn.close()
+        return []
+
+def get_note_by_id(note_id):
+    """
+    Pobiera notatkę po ID
+    
+    Args:
+        note_id (int): ID notatki
+    
+    Returns:
+        dict: Dane notatki lub None w przypadku błędu
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT * FROM notes WHERE id = ?", (note_id,))
+        note = cursor.fetchone()
+        conn.close()
+        
+        if note:
+            return {
+                'id': note[0],
+                'user_id': note[1],
+                'title': note[2],
+                'content': note[3],
+                'created_at': note[4],
+                'updated_at': note[5]
+            }
+        
+        return None
+    except Exception as e:
+        logger.error(f"Błąd przy pobieraniu notatki: {e}")
+        if 'conn' in locals():
+            conn.close()
+        return None
+
+def delete_note(note_id):
+    """
+    Usuwa notatkę
+    
+    Args:
+        note_id (int): ID notatki
+    
+    Returns:
+        bool: True jeśli operacja się powiodła, False w przeciwnym razie
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute("DELETE FROM notes WHERE id = ?", (note_id,))
+        
+        conn.commit()
+        conn.close()
+        
+        return True
+    except Exception as e:
+        logger.error(f"Błąd przy usuwaniu notatki: {e}")
+        if 'conn' in locals():
+            conn.close()
+        return False
+
+        # Dodaj te funkcje do sqlite_client.py
+
+def init_themes_table():
+    """Inicjalizuje tabelę tematów konwersacji"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Tabela tematów konwersacji
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS conversation_themes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            theme_name TEXT NOT NULL,
+            is_active INTEGER DEFAULT 1,
+            created_at TEXT,
+            last_used_at TEXT,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+        ''')
+        
+        # Dodaj pole theme_id do tabeli conversations
+        cursor.execute("PRAGMA table_info(conversations)")
+        columns = cursor.fetchall()
+        column_names = [col[1] for col in columns]
+        
+        if 'theme_id' not in column_names:
+            cursor.execute("ALTER TABLE conversations ADD COLUMN theme_id INTEGER")
+        
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        logger.error(f"Błąd inicjalizacji tabeli tematów: {e}")
+        if 'conn' in locals():
+            conn.close()
+        return False
+
+def create_conversation_theme(user_id, theme_name):
+    """
+    Tworzy nowy temat konwersacji dla użytkownika
+    
+    Args:
+        user_id (int): ID użytkownika
+        theme_name (str): Nazwa tematu
+    
+    Returns:
+        dict: Dane utworzonego tematu lub None w przypadku błędu
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        now = datetime.datetime.now(pytz.UTC).isoformat()
+        
+        cursor.execute(
+            "INSERT INTO conversation_themes (user_id, theme_name, created_at, last_used_at) VALUES (?, ?, ?, ?)",
+            (user_id, theme_name, now, now)
+        )
+        
+        theme_id = cursor.lastrowid
+        conn.commit()
+        
+        # Pobierz utworzony temat
+        cursor.execute("SELECT * FROM conversation_themes WHERE id = ?", (theme_id,))
+        theme_data = cursor.fetchone()
+        conn.close()
+        
+        if theme_data:
+            return {
+                'id': theme_data[0],
+                'user_id': theme_data[1],
+                'theme_name': theme_data[2],
+                'is_active': bool(theme_data[3]),
+                'created_at': theme_data[4],
+                'last_used_at': theme_data[5]
+            }
+        
+        return None
+    except Exception as e:
+        logger.error(f"Błąd przy tworzeniu tematu konwersacji: {e}")
+        if 'conn' in locals():
+            conn.close()
+        return None
+
+def get_user_themes(user_id):
+    """
+    Pobiera listę tematów konwersacji użytkownika
+    
+    Args:
+        user_id (int): ID użytkownika
+    
+    Returns:
+        list: Lista tematów konwersacji
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            "SELECT * FROM conversation_themes WHERE user_id = ? AND is_active = 1 ORDER BY last_used_at DESC",
+            (user_id,)
+        )
+        
+        themes = cursor.fetchall()
+        conn.close()
+        
+        result = []
+        for theme in themes:
+            result.append({
+                'id': theme[0],
+                'user_id': theme[1],
+                'theme_name': theme[2],
+                'is_active': bool(theme[3]),
+                'created_at': theme[4],
+                'last_used_at': theme[5]
+            })
+        
+        return result
+    except Exception as e:
+        logger.error(f"Błąd przy pobieraniu tematów konwersacji: {e}")
+        if 'conn' in locals():
+            conn.close()
+        return []
+
+def get_theme_by_id(theme_id):
+    """
+    Pobiera temat konwersacji po ID
+    
+    Args:
+        theme_id (int): ID tematu
+    
+    Returns:
+        dict: Dane tematu lub None w przypadku błędu
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT * FROM conversation_themes WHERE id = ?", (theme_id,))
+        theme = cursor.fetchone()
+        conn.close()
+        
+        if theme:
+            return {
+                'id': theme[0],
+                'user_id': theme[1],
+                'theme_name': theme[2],
+                'is_active': bool(theme[3]),
+                'created_at': theme[4],
+                'last_used_at': theme[5]
+            }
+        
+        return None
+    except Exception as e:
+        logger.error(f"Błąd przy pobieraniu tematu konwersacji: {e}")
+        if 'conn' in locals():
+            conn.close()
+        return None
+
+def create_themed_conversation(user_id, theme_id):
+    """
+    Tworzy nową konwersację dla określonego tematu
+    
+    Args:
+        user_id (int): ID użytkownika
+        theme_id (int): ID tematu
+    
+    Returns:
+        dict: Dane utworzonej konwersacji lub None w przypadku błędu
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        now = datetime.datetime.now(pytz.UTC).isoformat()
+        
+        cursor.execute(
+            "INSERT INTO conversations (user_id, created_at, last_message_at, theme_id) VALUES (?, ?, ?, ?)",
+            (user_id, now, now, theme_id)
+        )
+        
+        conversation_id = cursor.lastrowid
+        
+        # Aktualizuj czas ostatniego użycia tematu
+        cursor.execute(
+            "UPDATE conversation_themes SET last_used_at = ? WHERE id = ?",
+            (now, theme_id)
+        )
+        
+        conn.commit()
+        
+        # Pobierz utworzoną konwersację
+        cursor.execute("SELECT * FROM conversations WHERE id = ?", (conversation_id,))
+        conversation_data = cursor.fetchone()
+        conn.close()
+        
+        if conversation_data:
+            return {
+                'id': conversation_data[0],
+                'user_id': conversation_data[1],
+                'created_at': conversation_data[2],
+                'last_message_at': conversation_data[3],
+                'theme_id': conversation_data[4] if len(conversation_data) > 4 else None
+            }
+        
+        return None
+    except Exception as e:
+        logger.error(f"Błąd przy tworzeniu konwersacji dla tematu: {e}")
+        if 'conn' in locals():
+            conn.close()
+        return None
+
+def get_active_themed_conversation(user_id, theme_id):
+    """
+    Pobiera aktywną konwersację dla określonego tematu
+    
+    Args:
+        user_id (int): ID użytkownika
+        theme_id (int): ID tematu
+    
+    Returns:
+        dict: Dane konwersacji lub None w przypadku błędu
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            "SELECT * FROM conversations WHERE user_id = ? AND theme_id = ? ORDER BY last_message_at DESC LIMIT 1",
+            (user_id, theme_id)
+        )
+        
+        conversation_data = cursor.fetchone()
+        conn.close()
+        
+        if conversation_data:
+            return {
+                'id': conversation_data[0],
+                'user_id': conversation_data[1],
+                'created_at': conversation_data[2],
+                'last_message_at': conversation_data[3],
+                'theme_id': conversation_data[4] if len(conversation_data) > 4 else None
+            }
+        
+        # Jeśli nie znaleziono konwersacji dla tego tematu, utwórz nową
+        return create_themed_conversation(user_id, theme_id)
+    except Exception as e:
+        logger.error(f"Błąd przy pobieraniu aktywnej konwersacji dla tematu: {e}")
+        if 'conn' in locals():
+            conn.close()
+        return None

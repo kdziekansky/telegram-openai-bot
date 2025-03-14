@@ -25,7 +25,7 @@ translations = {
         "settings_change_name": "*Zmiana nazwy*\n\nWpisz komendę /setname [twoja_nazwa] aby zmienić swoją nazwę w bocie.",
         "model_not_available": "Wybrany model nie jest dostępny.",
         "model_selected": "Wybrany model: *{model}*\nKoszt: *{credits}* kredyt(ów) za wiadomość\n\nMożesz teraz zadać pytanie.",
-        "language_selected": "Język został zmieniony na: *{language}*",
+        "language_selected": "Język został zmieniony na: *{language_display}*",
         "choose_language": "Wybierz język interfejsu:",
         "history_title": "*Historia rozmów*",
         "history_user": "Ty",
@@ -60,13 +60,13 @@ translations = {
         "analyzing_photo": "Analizuję zdjęcie, proszę czekać...",
         "generating_image": "Generuję obraz, proszę czekać...",
         
-        # Nowe klucze dla obsługi języka i restartu
-        "restart_suggestion": "Aby zastosować nowy język do wszystkich elementów bota, użyj komendy /restart.",
+        # Klucze dla obsługi języka i restartu
+        "restart_suggestion": "Aby zastosować nowy język do wszystkich elementów bota, użyj przycisku poniżej.",
         "restart_button": "🔄 Zrestartuj bota",
         "restarting_bot": "Restartuję bota z nowym językiem...",
-        "language_restart_complete": "✅ Bot został zrestartowany! Wszystkie elementy interfejsu są teraz w języku: *{language}*",
+        "language_restart_complete": "✅ Bot został zrestartowany! Wszystkie elementy interfejsu są teraz w języku: *{language_display}*",
         
-        # Nowe klucze dla obrazów
+        # Klucze dla obrazów
         "image_usage": "Użycie: /image [opis obrazu]",
         "generated_image": "Wygenerowany obraz:",
         "cost": "Koszt",
@@ -96,7 +96,7 @@ translations = {
         "settings_change_name": "*Change Name*\n\nType the command /setname [your_name] to change your name in the bot.",
         "model_not_available": "The selected model is not available.",
         "model_selected": "Selected model: *{model}*\nCost: *{credits}* credit(s) per message\n\nYou can now ask a question.",
-        "language_selected": "Language has been changed to: *{language}*",
+        "language_selected": "Language has been changed to: *{language_display}*",
         "choose_language": "Choose interface language:",
         "history_title": "*Conversation History*",
         "history_user": "You",
@@ -131,13 +131,13 @@ translations = {
         "analyzing_photo": "Analyzing photo, please wait...",
         "generating_image": "Generating image, please wait...",
         
-        # Nowe klucze dla obsługi języka i restartu
-        "restart_suggestion": "To apply the new language to all bot elements, use the /restart command.",
+        # Klucze dla obsługi języka i restartu
+        "restart_suggestion": "To apply the new language to all bot elements, use the button below.",
         "restart_button": "🔄 Restart bot",
         "restarting_bot": "Restarting the bot with new language...",
-        "language_restart_complete": "✅ Bot has been restarted! All interface elements are now in: *{language}*",
+        "language_restart_complete": "✅ Bot has been restarted! All interface elements are now in: *{language_display}*",
         
-        # Nowe klucze dla obrazów
+        # Klucze dla obrazów
         "image_usage": "Usage: /image [image description]",
         "generated_image": "Generated image:",
         "cost": "Cost",
@@ -167,7 +167,7 @@ translations = {
         "settings_change_name": "*Изменение имени*\n\nВведите команду /setname [ваше_имя], чтобы изменить свое имя в боте.",
         "model_not_available": "Выбранная модель недоступна.",
         "model_selected": "Выбранная модель: *{model}*\nСтоимость: *{credits}* кредит(ов) за сообщение\n\nТеперь вы можете задать вопрос.",
-        "language_selected": "Язык изменен на: *{language}*",
+        "language_selected": "Язык изменен на: *{language_display}*",
         "choose_language": "Выберите язык интерфейса:",
         "history_title": "*История разговоров*",
         "history_user": "Вы",
@@ -202,13 +202,13 @@ translations = {
         "analyzing_photo": "Анализирую фото, пожалуйста, подождите...",
         "generating_image": "Генерирую изображение, пожалуйста, подождите...",
         
-        # Nowe klucze dla obsługi języka i restartu
-        "restart_suggestion": "Чтобы применить новый язык ко всем элементам бота, используйте команду /restart.",
+        # Klucze dla obsługi języka i restartu
+        "restart_suggestion": "Чтобы применить новый язык ко всем элементам бота, используйте кнопку ниже.",
         "restart_button": "🔄 Перезапустить бота",
         "restarting_bot": "Перезапуск бота с новым языком...",
-        "language_restart_complete": "✅ Бот был перезапущен! Все элементы интерфейса теперь на языке: *{language}*",
+        "language_restart_complete": "✅ Бот был перезапущен! Все элементы интерфейса теперь на языке: *{language_display}*",
         
-        # Nowe klucze dla obrazów
+        # Klucze dla obrazów
         "image_usage": "Использование: /image [описание изображения]",
         "generated_image": "Сгенерированное изображение:",
         "cost": "Стоимость",
