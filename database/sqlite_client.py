@@ -699,15 +699,21 @@ def init_reminders_notes_tables():
         return False
 
 def create_reminder(user_id, content, remind_at):
+    """
+    Tworzy nowe przypomnienie dla użytkownika
+    
+    Args:
+        user_id (int): ID użytkownika
+        content (str): Treść przypomnienia
+        remind_at (datetime): Data i czas przypomnienia
+    
+    Returns:
+        dict: Dane utworzonego przypomnienia lub None w przypadku błędu
+    """
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
-        # Проверка существования таблицы
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='reminders'")
-        if not cursor.fetchone():
-            init_reminders_notes_tables()
-            
         now = datetime.datetime.now(pytz.UTC).isoformat()
         remind_at_iso = remind_at.isoformat()
         
@@ -719,21 +725,29 @@ def create_reminder(user_id, content, remind_at):
         reminder_id = cursor.lastrowid
         conn.commit()
         
-        # Проверить, что запись создана
+        # Pobierz utworzone przypomnienie
         cursor.execute("SELECT * FROM reminders WHERE id = ?", (reminder_id,))
         reminder_data = cursor.fetchone()
         conn.close()
         
         if reminder_data:
-            # Логирование успешного создания
-            print(f"Успешно создано напоминание для пользователя {user_id}")
-            return {...}  # Вернуть данные
+            return {
+                'id': reminder_data[0],
+                'user_id': reminder_data[1],
+                'content': reminder_data[2],
+                'remind_at': reminder_data[3],
+                'created_at': reminder_data[4],
+                'is_completed': bool(reminder_data[5]),
+                'completed_at': reminder_data[6]
+            }
+        
+        return None
     except Exception as e:
-        print(f"Ошибка при создании напоминания: {e}")
+        logger.error(f"Błąd przy tworzeniu przypomnienia: {e}")
         if 'conn' in locals():
             conn.close()
-    return None
-    
+        return None
+
 def get_user_pending_reminders(user_id):
     """
     Pobiera listę oczekujących przypomnień użytkownika

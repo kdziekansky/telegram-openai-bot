@@ -38,23 +38,14 @@ def generate_conversation_pdf(conversation, user_info, bot_name="AI Bot"):
         name='UserMessage',
         parent=styles['Normal'],
         fontName='Helvetica-Bold',
-        fontSize=10,
-        spaceAfter=8,
-        leftIndent=0
+        spaceAfter=6
     ))
-
     styles.add(ParagraphStyle(
         name='BotMessage',
         parent=styles['Normal'],
         fontName='Helvetica',
-        fontSize=10,
-        spaceAfter=12,
         leftIndent=20,
-        rightIndent=10,
-        borderWidth=1,
-        borderColor=colors.lightgrey,
-        borderRadius=5,
-        borderPadding=5
+        spaceAfter=12
     ))
     
     # Elementy dokumentu

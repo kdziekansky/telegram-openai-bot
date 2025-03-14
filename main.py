@@ -4,17 +4,10 @@ import re
 import datetime
 import pytz
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-try:
-    from telegram.ext import (
-        Application, CommandHandler, MessageHandler, 
-        CallbackQueryHandler, ContextTypes, filters
-    )
-except ImportError:
-    from telegram.ext import (
-        CommandHandler, MessageHandler, 
-        CallbackQueryHandler, ConversationHandler, Filters as filters
-    )
-    from bot_adapter import ApplicationAdapter as Application
+from telegram.ext import (
+    Application, CommandHandler, MessageHandler, 
+    CallbackQueryHandler, ContextTypes, filters
+)
 from telegram.constants import ParseMode, ChatAction
 from config import (
     TELEGRAM_TOKEN, DEFAULT_MODEL, AVAILABLE_MODELS, 
@@ -737,13 +730,8 @@ Dostępne kredyty: *{credits}*
     
     await update.message.reply_text(info, parse_mode=ParseMode.MARKDOWN)
 
-
-async def buy_stars_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Покупка кредитов за звезды Telegram"""
-    from handlers.credit_handler import show_stars_purchase_options
-    await show_stars_purchase_options(update, context)
-
 # Główna funkcja uruchamiająca bota
+
 def main():
     """Funkcja uruchamiająca bota"""
     # Inicjalizacja aplikacji
@@ -767,7 +755,6 @@ def main():
     # Dodanie handlerów kredytów
     application.add_handler(CommandHandler("credits", credits_command))
     application.add_handler(CommandHandler("buy", buy_command))
-    application.add_handler(CommandHandler("buystars", buy_stars_command))
     application.add_handler(CommandHandler("creditstats", credit_stats_command))
     
     # Dodanie handlerów komend administracyjnych

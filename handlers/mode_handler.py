@@ -75,10 +75,10 @@ async def handle_mode_selection(update: Update, context: ContextTypes.DEFAULT_TY
             short_description = mode_description
         
         await query.edit_message_text(
-            get_text("mode_selected", language, 
-            mode_name=mode_name, 
-            credit_cost=credit_cost, 
-            description=short_description),
+            f"Wybrany tryb: *{mode_name}*\n"
+            f"Koszt: *{credit_cost}* kredyt(ów) za wiadomość\n\n"
+            f"Opis: _{short_description}_\n\n"
+            f"Możesz teraz zadać pytanie w wybranym trybie.",
             parse_mode=ParseMode.MARKDOWN
         )
         
