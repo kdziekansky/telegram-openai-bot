@@ -34,7 +34,7 @@ from database.credits_client import (
 # Import handlerów kredytów
 from handlers.credit_handler import (
     credits_command, buy_command, handle_credit_callback,
-    credit_stats_command
+    credit_stats_command, credit_analytics_command  # Add this function
 )
 
 # Import handlerów kodu aktywacyjnego
@@ -785,7 +785,7 @@ def main():
     application.add_handler(CommandHandler("notes", notes_command))
 
     # Handler rozszerzonego monitorowania kredytów
-    application.add_handler(CommandHandler("creditstats", credit_analytics_command))
+    application.add_handler(CommandHandler("creditstats", credit_stats_command))
 
     # Uruchom cykliczne sprawdzanie przypomnień
     job_queue = application.job_queue

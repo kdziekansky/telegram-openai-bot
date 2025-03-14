@@ -129,3 +129,23 @@ if __name__ == "__main__":
         print("Aktualizacja zakończona pomyślnie!")
     else:
         print("Wystąpił błąd podczas aktualizacji. Sprawdź logi.")
+
+    def run_all_updates():
+    """
+    Uruchamia wszystkie funkcje aktualizujące bazę danych
+    """
+    logger.info("Rozpoczynam pełną aktualizację bazy danych")
+    
+    # Aktualizacja tabel kredytów
+    update_result = update_database_credits()
+    
+    # Inicjalizacja tabel tematów konwersacji
+    from database.sqlite_client import init_themes_table
+    init_themes_table()
+    
+    # Inicjalizacja tabel przypomnień i notatek
+    from database.sqlite_client import init_reminders_notes_tables
+    init_reminders_notes_tables()
+    
+    logger.info("Zakończono pełną aktualizację bazy danych")
+    return update_result
