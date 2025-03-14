@@ -11,20 +11,25 @@ from handlers.menu_handler import get_user_language
 
 async def theme_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Tworzy nowy temat konwersacji lub wyświetla listę istniejących tematów
-    Użycie: /theme lub /theme [nazwa_tematu]
+    Создает новую тему разговора или отображает список существующих тем
+    Использование: /theme или /theme [название_темы]
     """
     user_id = update.effective_user.id
     language = get_user_language(context, user_id)
     
-    # Jeśli podano nazwę tematu, utwórz nowy temat
-    if context.args and len(' '.join(context.args)) > 0:
-        theme_name = ' '.join(context.args)
-        await create_new_theme(update, context, theme_name)
+    # Если аргументы не указаны, показать справку
+    if not context.args:
+        help_text = get_text("theme_help", language, default=(
+            "Темы позволяют организовать разные разговоры по темам.\n\n"
+            "Доступные команды:\n"
+            "/theme [название] - создать новую тему\n"
+            "/theme - показать список существующих тем\n"
+            "/notheme - вернуться к разговору без темы\n\n"
+            "Примеры тем: Работа, Учёба, Путешествия, Программирование, Идеи"
+        ))
+        await update.message.reply_text(help_text, parse_mode=ParseMode.MARKDOWN)
+        await show_themes_list(update, context)
         return
-    
-    # W przeciwnym razie wyświetl listę tematów
-    await show_themes_list(update, context)
 
 async def create_new_theme(update: Update, context: ContextTypes.DEFAULT_TYPE, theme_name):
     """

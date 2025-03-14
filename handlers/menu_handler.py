@@ -71,11 +71,13 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Przygotuj klawiaturę z przyciskami menu
     keyboard = [
-        [KeyboardButton(get_text("menu_chat_mode", language))],
-        [KeyboardButton(get_text("menu_dialog_history", language))],
-        [KeyboardButton(get_text("menu_get_tokens", language))],
-        [KeyboardButton(get_text("menu_balance", language)), KeyboardButton(get_text("menu_settings", language))],
-        [KeyboardButton(get_text("menu_help", language))]
+    [KeyboardButton(get_text("menu_chat_mode", language))],
+    [KeyboardButton(get_text("menu_dialog_history", language))],
+    [KeyboardButton(get_text("menu_get_tokens", language))],
+    [KeyboardButton(get_text("menu_reminders", language)), KeyboardButton(get_text("menu_notes", language))],  # Новая строка
+    [KeyboardButton(get_text("menu_themes", language)), KeyboardButton(get_text("menu_export", language))],  # Новая строка
+    [KeyboardButton(get_text("menu_balance", language)), KeyboardButton(get_text("menu_settings", language))],
+    [KeyboardButton(get_text("menu_help", language))]
     ]
     
     reply_markup = ReplyKeyboardMarkup(

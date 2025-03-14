@@ -116,8 +116,13 @@ def run_all_updates():
     # Aktualizacja tabel kredytów
     update_result = update_database_credits()
     
-    # Tutaj można dodać wywołania innych funkcji aktualizujących bazę danych
-    # np. update_database_users(), update_database_conversations() itp.
+    # Inicjalizacja tabel tematów konwersacji
+    from database.sqlite_client import init_themes_table
+    init_themes_table()
+    
+    # Inicjalizacja tabel przypomnień i notatek
+    from database.sqlite_client import init_reminders_notes_tables
+    init_reminders_notes_tables()
     
     logger.info("Zakończono pełną aktualizację bazy danych")
     return update_result
@@ -130,10 +135,10 @@ if __name__ == "__main__":
     else:
         print("Wystąpił błąd podczas aktualizacji. Sprawdź logi.")
 
-    def run_all_updates():
-    """
-    Uruchamia wszystkie funkcje aktualizujące bazę danych
-    """
+def run_all_updates():
+       
+    # Uruchamia wszystkie funkcje aktualizujące bazę danych
+    
     logger.info("Rozpoczynam pełną aktualizację bazy danych")
     
     # Aktualizacja tabel kredytów
